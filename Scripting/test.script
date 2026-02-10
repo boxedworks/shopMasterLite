@@ -1,0 +1,16 @@
+
+down()
+
+var fence = get()
+
+log(jumping fence!)
+fence:jump()
+log(jumped fence!)
+
+sleep(8)
+
+up()
+
+log(jumping fence!)
+fence:jump()
+log(jumped fence!)
