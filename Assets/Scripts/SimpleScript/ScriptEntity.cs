@@ -69,9 +69,9 @@ namespace SimpleScript
 
         OwnerId = ownerId,
 
-        EntityStorage = new Dictionary<int, int>(),
+        ItemStorage = new(),
 
-        EntityVariables_Int = new List<ScriptManager.EntityVariable_Int>(),
+        EntityVariables_Int = new(),
 
         X = (int)position.x,
         Y = (int)position.y,
@@ -149,11 +149,11 @@ namespace SimpleScript
     {
       return s_ScriptEntities.ContainsKey(id) ? s_ScriptEntities[id] : null;
     }
-    public static ScriptEntity GetEntity((int, int, int) pos, int zIndex = 0)
+    public static ScriptEntity GetEntity((int x, int y, int z) pos, int zIndex = 0)
     {
       return TileHasEntities(pos) ? GetTileEntities(pos)[zIndex] : null;
     }
-    public static ScriptEntity GetEntityByType((int, int, int) pos, int entityType)
+    public static ScriptEntity GetEntityByType((int x, int y, int z) pos, int entityType)
     {
       var numEntities = GetTileEntityCount(pos);
       if (numEntities == 0)
@@ -312,7 +312,7 @@ namespace SimpleScript
       public int Direction;
 
       // Item storage
-      public Dictionary<int, int> EntityStorage;
+      public List<Item> ItemStorage;
 
       // Holds entity's variables that can be referenced in scripts
       public List<ScriptManager.EntityVariable_Int> EntityVariables_Int;
@@ -651,6 +651,11 @@ namespace SimpleScript
       );
     }
 
-  }
+    // Update menus associated with entities; ex: inventory panel
+    public void UpdateUIs()
+    {
+      CustomUI.InventoryPanel.InventoryPanelManager.TryReplaceInventoryPanel_S(this);
+    }
 
+  }
 }

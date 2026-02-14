@@ -1,0 +1,14 @@
+{
+  "_ItemTypeData": [
+    {
+      "Id": 0,
+      "Name": "Wood",
+      "Description": "A piece of wood. Can be used for crafting."
+    },
+    {
+      "Id": 1,
+      "Name": "Stone",
+      "Description": "A piece of stone. Can be used for crafting."
+    }
+  ]
+}

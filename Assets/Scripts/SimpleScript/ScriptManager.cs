@@ -8,6 +8,8 @@ using System.IO;
 using StringMath;
 using System;
 
+using CustomUI;
+
 namespace SimpleScript
 {
 
@@ -19,9 +21,9 @@ namespace SimpleScript
 
     Dictionary<int, ScriptBase> _scripts;
 
-    public static void Initialize(ScriptManager scriptManager)
+    public static void Initialize()
     {
-      s_Singleton = scriptManager;
+      s_Singleton = new ScriptManager();
 
       ScriptEntity.ScriptEntityHelper.Init();
       s_Singleton.InitializeSystemFunctions();
@@ -169,7 +171,7 @@ namespace SimpleScript
         if (!_enabled) return;
         if (!_attachedEntity._CanTick) return;
 
-        Debug.Log($"Ticking script [{_Id}] for entity [{_attachedEntity._EntityData.Id}]");
+        //Debug.Log($"Ticking script [{_Id}] for entity [{_attachedEntity._EntityData.Id}]");
 
         var breakLoop = false;
         var tokensAlloted = 10;
@@ -194,7 +196,9 @@ namespace SimpleScript
           {
 
             // Log
-            Debug.LogError($"Line [{_lineIndex}]: [{lineOriginal}] [{error}]");
+            var errorString = $"Line [{_lineIndex}]: [{lineOriginal}] [{error}]";
+            Debug.LogError(errorString);
+            Terminal.s_Singleton.LogMessage($"<color=red>{errorString}</color>");
 
             // Exit loop and remove script
             breakLoop = true;
@@ -904,8 +908,7 @@ namespace SimpleScript
                     tickCooldown = systemReturnData.TickCooldown;
                     if (returnData == null)
                     {
-                      if (tickCooldown == 0)
-                        breakLoop = true;
+                      breakLoop = true;
                       break;
                     }
 
@@ -934,6 +937,11 @@ namespace SimpleScript
                           logError($"Null reference in [{functionName}]");
                           break;
 
+
+                        case "9000":
+                          var customError = string.Join(" ", errorData[1..]);
+                          logError($"{customError}");
+                          break;
                         case "9999":
                           logError($"Not implemented: [{functionName}]");
                           break;
@@ -945,7 +953,7 @@ namespace SimpleScript
                     }
 
                     if (parameterCheck)
-                      returnStatement = returnData ?? "";
+                      returnStatement = returnData;
                   }
 
                   // Unity functions
@@ -1035,6 +1043,46 @@ namespace SimpleScript
       {
         TickCooldown = 1;
       }
+
+      public static SystemFunctionReturnData Success(int tickCooldown = 1)
+      {
+        return new SystemFunctionReturnData() { TickCooldown = tickCooldown };
+      }
+      public static SystemFunctionReturnData Success(string data, int tickCooldown = 1)
+      {
+        return new SystemFunctionReturnData() { Data = data, TickCooldown = tickCooldown };
+      }
+
+      // Errors
+      public static SystemFunctionReturnData Error(string errorCode)
+      {
+        return new SystemFunctionReturnData() { Data = $"!E{errorCode}" };
+      }
+      public static SystemFunctionReturnData Error(string errorCode, params object[] args)
+      {
+        return new SystemFunctionReturnData() { Data = $"!E{errorCode} {string.Join(" ", args)}" };
+      }
+
+      public static SystemFunctionReturnData InvalidFunction()
+      {
+        return Error("1000");
+      }
+      public static SystemFunctionReturnData InvalidParameters(int expected)
+      {
+        return Error("1001", expected);
+      }
+      public static SystemFunctionReturnData NullReference()
+      {
+        return Error("1002");
+      }
+      public static SystemFunctionReturnData NotImplemented()
+      {
+        return Error("9999");
+      }
+      public static SystemFunctionReturnData Custom(string customError)
+      {
+        return Error("9000", customError);
+      }
     }
 
     public static void RegisterSystemFunction(string name, Func<ScriptBase, string, string[], SystemFunctionReturnData> function)
@@ -1059,20 +1107,20 @@ namespace SimpleScript
           // Validate accessor
           if (accessor != "")
           {
-            return new SystemFunctionReturnData() { Data = $"!E1000" };
+            return SystemFunctionReturnData.InvalidFunction();
           }
 
           // Validate parameters
           if (parameters.Length != 1)
           {
-            return new SystemFunctionReturnData() { Data = $"!E1001 1" };
+            return SystemFunctionReturnData.InvalidParameters(1);
           }
 
           var logMessage = parameters[0];
           Debug.Log(logMessage);
           Terminal.s_Singleton.LogMessage(logMessage);
 
-          return new SystemFunctionReturnData();
+          return SystemFunctionReturnData.Success();
         }
       );
 
@@ -1085,13 +1133,13 @@ namespace SimpleScript
           // Validate accessor
           if (accessor != "")
           {
-            return new SystemFunctionReturnData() { Data = $"!E1000" };
+            return SystemFunctionReturnData.InvalidFunction();
           }
 
           // Validate parameters
           if (parameters.Length != 0)
           {
-            return new SystemFunctionReturnData() { Data = $"!E1001 0" };
+            return SystemFunctionReturnData.InvalidParameters(0);
           }
 
           // Delete script
@@ -1099,12 +1147,9 @@ namespace SimpleScript
 
           // Check for parent scripts
           var parentScript = script._ParentScript;
-          if (parentScript != null)
-          {
-            parentScript.Enable();
-          }
+          parentScript?.Enable();
 
-          return new SystemFunctionReturnData() { TickCooldown = 0 };
+          return SystemFunctionReturnData.Success(0);
         }
       );
 
@@ -1117,7 +1162,7 @@ namespace SimpleScript
           // Validate accessor
           if (IsValidVariableEntity(accessor))
           {
-            return new SystemFunctionReturnData() { Data = $"!E9999" };
+            return SystemFunctionReturnData.NotImplemented();
           }
           else
             switch (accessor)
@@ -1128,7 +1173,7 @@ namespace SimpleScript
                 // Validate parameters
                 if (parameters.Length != 1)
                 {
-                  return new SystemFunctionReturnData() { Data = $"!E1001 1" };
+                  return SystemFunctionReturnData.InvalidParameters(1);
                 }
 
                 // Move entity in direction
@@ -1147,7 +1192,7 @@ namespace SimpleScript
                   script._OwnerId
                 );
 
-                return new SystemFunctionReturnData() { TickCooldown = 0 };
+                return SystemFunctionReturnData.Success(0);
 
               // System-level move; move(4, 0, 0, 1)
               case "_":
@@ -1155,19 +1200,15 @@ namespace SimpleScript
                 // Validate parameters
                 if (parameters.Length != 4)
                 {
-                  return new SystemFunctionReturnData() { Data = $"!E1001 4" };
+                  return SystemFunctionReturnData.InvalidParameters(4);
                 }
 
                 // Get entity by variable or id
-                ScriptEntity entity = null;
                 var entityData = parameters[0];
-                if (IsValidVariableEntity(entityData))
-                  entity = GetEntityByStatement(entityData);
-                else
-                  entity = ScriptEntity.GetEntity(int.Parse(entityData));
+                ScriptEntity entity = GetEntityByIdOrStatement(entityData);
                 if (entity == null)
                 {
-                  return new SystemFunctionReturnData() { Data = $"!E1002" };
+                  return SystemFunctionReturnData.NullReference();
                 }
 
                 // Move entity to position
@@ -1176,11 +1217,11 @@ namespace SimpleScript
                 var position_z = parameters[3];
                 entity.TryMove((int.Parse(position_x), int.Parse(position_z), int.Parse(position_y)), true);
 
-                return new SystemFunctionReturnData() { TickCooldown = 0 };
+                return SystemFunctionReturnData.Success(0);
 
               // Invalid accessor
               default:
-                return new SystemFunctionReturnData() { Data = $"!E1000" };
+                return SystemFunctionReturnData.InvalidFunction();
             }
         }
       );
@@ -1193,7 +1234,7 @@ namespace SimpleScript
           // Validate parameters
           if (parameters.Length != 0)
           {
-            return new SystemFunctionReturnData() { Data = $"!E1001 0" };
+            return SystemFunctionReturnData.InvalidParameters(0);
           }
 
           // Move up
@@ -1208,7 +1249,7 @@ namespace SimpleScript
           // Validate parameters
           if (parameters.Length != 0)
           {
-            return new SystemFunctionReturnData() { Data = $"!E1001 0" };
+            return SystemFunctionReturnData.InvalidParameters(0);
           }
 
           // Move down
@@ -1223,7 +1264,7 @@ namespace SimpleScript
           // Validate parameters
           if (parameters.Length != 0)
           {
-            return new SystemFunctionReturnData() { Data = $"!E1001 0" };
+            return SystemFunctionReturnData.InvalidParameters(0);
           }
 
           // Move left
@@ -1238,7 +1279,7 @@ namespace SimpleScript
           // Validate parameters
           if (parameters.Length != 0)
           {
-            return new SystemFunctionReturnData() { Data = $"!E1001 0" };
+            return SystemFunctionReturnData.InvalidParameters(0);
           }
 
           // Move right
@@ -1259,7 +1300,7 @@ namespace SimpleScript
             // Validate parameters
             if (parameters.Length != 0)
             {
-              return new SystemFunctionReturnData() { Data = $"!E1001 0" };
+              return SystemFunctionReturnData.InvalidParameters(0);
             }
 
             // Get entity in front of current entity based on direction
@@ -1276,13 +1317,13 @@ namespace SimpleScript
             var entity = ScriptEntity.GetEntity(usePosition);
             if (entity == null)
             {
-              return new SystemFunctionReturnData() { Data = $"!E1002" };
+              return SystemFunctionReturnData.NullReference();
             }
 
             // Return found entity
             else
             {
-              return new SystemFunctionReturnData() { Data = GetEntityStatement(entity), TickCooldown = 0 };
+              return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
             }
           }
 
@@ -1291,7 +1332,7 @@ namespace SimpleScript
             // Validate parameters
             if (parameters.Length != 1)
             {
-              return new SystemFunctionReturnData() { Data = $"!E1001 1" };
+              return SystemFunctionReturnData.InvalidParameters(1);
             }
 
             // Get entity by id
@@ -1299,20 +1340,20 @@ namespace SimpleScript
             var entity = ScriptEntity.GetEntity(int.Parse(entityId));
             if (entity == null)
             {
-              return new SystemFunctionReturnData() { Data = $"!E1002" };
+              return SystemFunctionReturnData.NullReference();
             }
 
             // Return found entity
             else
             {
-              return new SystemFunctionReturnData() { Data = GetEntityStatement(entity), TickCooldown = 0 };
+              return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
             }
           }
 
           // Invalid accessor
           else
           {
-            return new SystemFunctionReturnData() { Data = $"!E1000" };
+            return SystemFunctionReturnData.InvalidFunction();
           }
         }
       );
@@ -1326,18 +1367,58 @@ namespace SimpleScript
           // Validate accessor
           if (accessor != "")
           {
-            return new SystemFunctionReturnData() { Data = $"!E1000" };
+            return SystemFunctionReturnData.InvalidFunction();
           }
 
           // Validate parameters
           if (parameters.Length != 1)
           {
-            return new SystemFunctionReturnData() { Data = $"!E1001 1" };
+            return SystemFunctionReturnData.InvalidParameters(1);
           }
 
           var ticks = int.Parse(parameters[0]);
-          return new SystemFunctionReturnData() { TickCooldown = ticks };
+          return SystemFunctionReturnData.Success(ticks);
 
+        }
+      );
+
+      // Give item
+      RegisterSystemFunction(
+        "giveItem",
+        (ScriptBase script, string accessor, string[] parameters) =>
+        {
+          // Validate accessor
+          if (accessor != "_")
+          {
+            return SystemFunctionReturnData.InvalidFunction();
+          }
+
+          // Validate parameters
+          if (parameters.Length != 2)
+          {
+            return SystemFunctionReturnData.InvalidParameters(2);
+          }
+
+          // Get entity by id
+          var entityData = parameters[0];
+          var entity = GetEntityByIdOrStatement(entityData);
+          if (entity == null)
+          {
+            return SystemFunctionReturnData.NullReference();
+          }
+
+          var itemId = int.Parse(parameters[1]);
+
+          // Give item
+          var item = ItemManager.GiveItem(entity, itemId);
+          if (item == null)
+          {
+            return SystemFunctionReturnData.Custom("Inventory full");
+          }
+          Terminal.s_Singleton.LogMessage($"Gave item ID {item._ItemTypeData.Name} to entity ID {entityData}");
+
+          //
+          return SystemFunctionReturnData.Success(0);
         }
       );
 
@@ -1355,6 +1436,18 @@ namespace SimpleScript
       statement_ = statement_.Trim();
       if (IsValidVariableEntity(statement_))
         return ScriptEntity.GetEntity(int.Parse(statement_.Split("$Entity[")[1][..^1]));
+      return null;
+    }
+    static ScriptEntity GetEntityById(int id)
+    {
+      return ScriptEntity.GetEntity(id);
+    }
+    static ScriptEntity GetEntityByIdOrStatement(string idOrStatement)
+    {
+      if (IsValidVariableEntity(idOrStatement))
+        return GetEntityByStatement(idOrStatement);
+      else if (int.TryParse(idOrStatement, out var id))
+        return GetEntityById(id);
       return null;
     }
 
