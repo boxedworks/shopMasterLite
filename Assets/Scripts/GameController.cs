@@ -19,11 +19,12 @@ public class GameController : MonoBehaviour
     var playerEntity = new ScriptEntity(0, new Vector3(0, 0, 1), -1);
     playerEntity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
     {
-      PathTo = "test"
+      PathTo = "test",
+      ScriptType = ScriptManager.ScriptType.PLAYER
     });
     playerEntity._EntityData.ItemStorage = new();
     for (int i = 0; i < 4; i++)
-      playerEntity._EntityData.ItemStorage.Add(null);
+      playerEntity._Storage.Add(null);
 
     new ScriptEntity(4, new Vector3(0, 0, 0), -1);
 
@@ -49,7 +50,7 @@ public class GameController : MonoBehaviour
       _lastTick += _tickRate;
       s_CurrentTick++;
 
-      //Debug.Log($"<color=yellow>Tick: {s_CurrentTick}</color>");
+      Debug.Log($"<color=yellow>Tick: {s_CurrentTick}</color>");
       ScriptManager.TickScripts();
       ScriptEntity.TickScriptEntities();
     }

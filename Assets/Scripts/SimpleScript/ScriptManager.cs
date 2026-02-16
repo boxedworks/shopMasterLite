@@ -29,10 +29,20 @@ namespace SimpleScript
       s_Singleton.InitializeSystemFunctions();
     }
 
+    public enum ScriptType
+    {
+      NONE,
+
+      PLAYER,
+
+      ENTITY,
+      ITEM
+    }
+
     public struct ScriptLoadData
     {
       public string PathTo;
-      public bool IsServerScript;
+      public ScriptType ScriptType;
 
       public string Headers;
     }
@@ -72,7 +82,7 @@ namespace SimpleScript
       {
         parentScript._ExternalReturnData = returnData;
         parentScript.Enable();
-        parentScript.Tick();
+        parentScript.Tick(returnData.StartsWith("!E"));
       }
     }
     //
@@ -81,28 +91,45 @@ namespace SimpleScript
       RemoveScript(script._Id, returnData);
     }
 
-    const string _SCRIPTING_PATH = @"Scripting/";
-    public static string LoadScript(string scriptPath)
+    const string _SCRIPTING_PATH = @"Scripting";
+    const string _SCRIPTING_PATH_PLAYER = _SCRIPTING_PATH + "/Player";
+    const string _SCRIPTING_PATH_ENTITY = _SCRIPTING_PATH + "/System/Entity";
+    const string _SCRIPTING_PATH_ITEM = _SCRIPTING_PATH + "/System/Item";
+    public static string LoadScript(string dir, string scriptPath)
     {
-      scriptPath = $@"{_SCRIPTING_PATH}{scriptPath}.script";
+      scriptPath = $@"{dir}/{scriptPath}";
       if (File.Exists(scriptPath))
         return File.ReadAllText(scriptPath);
 
       Debug.LogError("Script not found: " + scriptPath);
       return "";
     }
-
-    public static string LoadServerScript(string scriptPath)
+    public static string[] LoadScripts(string dir)
     {
-      scriptPath = $@"{_SCRIPTING_PATH}Server/{scriptPath}";
-      if (File.Exists(scriptPath))
-        return File.ReadAllText(scriptPath);
-
-      return "";
+      return Directory.GetFiles(dir);
     }
-    public static string[] GetServerScripts()
+
+    public static string LoadPlayerScript(string scriptPath)
     {
-      return Directory.GetFiles($@"{_SCRIPTING_PATH}Server/");
+      return LoadScript(_SCRIPTING_PATH_PLAYER, $"{scriptPath}.script");
+    }
+
+    public static string LoadSystemEntityScript(string scriptPath)
+    {
+      return LoadScript(_SCRIPTING_PATH_ENTITY, $"{scriptPath}");
+    }
+    public static string[] GetSystemEntityScripts()
+    {
+      return LoadScripts(_SCRIPTING_PATH_ENTITY);
+    }
+
+    public static string LoadSystemItemScript(string scriptPath)
+    {
+      return LoadScript(_SCRIPTING_PATH_ITEM, $"{scriptPath}");
+    }
+    public static string[] GetSystemItemScripts()
+    {
+      return LoadScripts(_SCRIPTING_PATH_ITEM);
     }
 
     // Tick update all scripts
@@ -111,10 +138,16 @@ namespace SimpleScript
       var scripts = s_Singleton._scripts;
       if (scripts != null)
       {
-        var scriptIds = new List<int>(scripts.Keys);
-        for (var i = scriptIds.Count - 1; i >= 0; i--)
+        var keys = new List<int>(scripts.Keys);
+        foreach (var key in keys)
         {
-          var script = scripts[scriptIds[i]];
+          if (!scripts.ContainsKey(key))
+          {
+            Debug.LogWarning($"Trying to tick non-existant script[{key}]!");
+            continue;
+          }
+
+          var script = scripts[key];
           script.Tick();
         }
       }
@@ -209,10 +242,10 @@ namespace SimpleScript
       }
 
       // Parse simplescript
-      public void Tick()
+      public void Tick(bool forceTick = false)
       {
 
-        //Debug.Log($"Attempting to tick script: {_attachedEntity._EntityTypeData.Name}");
+        Debug.Log($"Attempting to tick script: {_attachedEntity._EntityTypeData.Name}");
 
         // Check can tick
         if (!_isEnabled || !_isValid) return;
@@ -222,7 +255,8 @@ namespace SimpleScript
         if (_lastTick == currentTick)
         {
           Debug.LogWarning($"Attempting to tick [{_attachedEntity._EntityTypeData.Name}] more than 1nce per tick");
-          return;
+          if (!forceTick)
+            return;
         }
         _lastTick = currentTick;
 
@@ -252,9 +286,9 @@ namespace SimpleScript
             //Debug.Log($"External return data found.. replacing: {_externalReturnData} [{_externalReturnStatement}] ........... {line}");
 
             // Check error
-            if (_ExternalReturnData.StartsWith("E! "))
+            if (_ExternalReturnData.StartsWith("!E"))
             {
-              var error = _ExternalReturnData[3..];
+              var error = _ExternalReturnData[2..].Trim();
               logError(error);
               break;
             }
@@ -281,7 +315,7 @@ namespace SimpleScript
 
             // Exit loop and remove script
             breakLoop = true;
-            ScriptManager.RemoveScript(this, $"E! {error}");
+            ScriptManager.RemoveScript(this, $"!E {error}");
           }
 
           // Check blank line
@@ -685,7 +719,7 @@ namespace SimpleScript
             }
 
             // Traverse through statement objects until end
-            ScriptEntity currentTarget = null;
+            ScriptTarget currentTarget = null;
             var currentTargetDepth = -1;
             var accessorLast = "";
             for (var i = 0; i < statementData.Count; i++)
@@ -713,17 +747,6 @@ namespace SimpleScript
                       break;
                     }
 
-                    // Return self
-                    // if (word == "this")
-                    // {
-                    //   currentTarget = _attachedEntity;
-                    //   currentTargetDepth = i;
-
-                    //   if (parameterCheck)
-                    //     returnStatement = GetEntityStatement(currentTarget);
-                    //   break;
-                    // }
-
                     // Check number
                     if (int.TryParse(word, out _))
                     {
@@ -735,7 +758,7 @@ namespace SimpleScript
                     // Check entity variable
                     if (IsValidVariableEntity(word))
                     {
-                      currentTarget = GetEntityByStatement(word);
+                      currentTarget = new ScriptTarget(GetEntityByStatement(word));
                       currentTargetDepth = i;
 
                       if (parameterCheck)
@@ -743,8 +766,25 @@ namespace SimpleScript
                       continue;
                     }
 
+                    // Check item variable
+                    if (IsValidVariableItem(word))
+                    {
+                      currentTarget = new ScriptTarget(GetItemByStatement(word));
+                      currentTargetDepth = i;
+
+                      if (parameterCheck)
+                        returnStatement = word;
+                      continue;
+                    }
+
+                    // Check item storage
+                    if (_attachedEntity._HasStorage && word == "items")
+                    {
+                      continue;
+                    }
+
                     // Check all valid first accessors
-                    if (new string[] { "_" }.Contains(word))
+                    if (new string[] { "_", }.Contains(word))
                     {
                       continue;
                     }
@@ -754,26 +794,20 @@ namespace SimpleScript
                   }
 
                   // Check valid accessor based on last accessor
-                  string[] validAccessors = null;
+                  List<string> validAccessors = null;
                   if (IsValidVariableEntity(returnStatement))
                   {
                     var entityGot = GetEntityByStatement(returnStatement);
                     if (entityGot.HasEntityVariable_Int(word))
                     {
                       returnStatement = $"{entityGot.GetEntityVariable_Int(word)}";
-                      validAccessors = new string[] { word };
+
+                      validAccessors = new()
+                      {
+                        word
+                      };
                     }
                   }
-                  // else
-                  //   switch (accessorLastSave)
-                  //   {
-
-                  //     case "script":
-
-                  //       validAccessors = new string[] { "Entity" };
-                  //       break;
-
-                  //   }
 
                   // Validate
                   if (!(validAccessors?.Contains(word) ?? false))
@@ -781,21 +815,6 @@ namespace SimpleScript
                     logError($"Null object reference ({accessorLastSave} => {word})");
                     break;
                   }
-
-                  // Handle
-                  // switch (word)
-                  // {
-
-                  //   case "Entity":
-
-                  //     currentTarget = _attachedEntity;
-                  //     currentTargetDepth = i;
-
-                  //     if (parameterCheck)
-                  //       returnStatement = GetEntityStatement(currentTarget);
-                  //     break;
-
-                  // }
 
                   break;
 
@@ -887,14 +906,23 @@ namespace SimpleScript
                   var isValidFunction = false;
                   var isEntityFunction = false;
                   var isSystemFunction = false;
+                  var isItemFunction = false;
 
-                  // Entity function
+                  // Check entity function
                   if (currentTarget != null)
                   {
-                    isEntityFunction = isValidFunction = ScriptEntity.ScriptEntityHelper.HasFunction(currentTarget, functionName/*, currentTarget._EntityData.Id == _attachedEntity._EntityData.Id*/);
+                    switch (currentTarget._TargetType)
+                    {
+                      case ScriptTarget.TargetType.SCRIPT_ENTITY:
+                        isEntityFunction = isValidFunction = ScriptEntity.ScriptEntityHelper.HasFunction(currentTarget._ScriptEntity, functionName);
+                        break;
+                      case ScriptTarget.TargetType.ITEM:
+                        isItemFunction = isValidFunction = ItemManager.HasFunction(currentTarget._Item, functionName);
+                        break;
+                    }
                   }
 
-                  // System function
+                  // Check system function
                   if (!isValidFunction)
                     foreach (var systemFunction in s_Singleton._systemFunctions)
                     {
@@ -908,16 +936,18 @@ namespace SimpleScript
                   if (!isValidFunction)
                   {
                     if (currentTarget != null)
-                      logError($"Referencing non-existant function {currentTarget._EntityTypeData.Name}:{functionName})");
+                      logError($"Referencing non-existant function {currentTarget._Type}:{functionName})");
                     else
                       logError($"Null-reference exception NULL:{functionName})");
                     break;
                   }
 
-                  // Validate function # parameters (entity only)
-                  if (isEntityFunction)
+                  // Validate function # parameters (entity/item only)
+                  if (isEntityFunction || isItemFunction)
                   {
-                    var numValidParameters = ScriptEntity.ScriptEntityHelper.GetFunctionParameterCount(functionName);
+                    var numValidParameters = isEntityFunction ?
+                      ScriptEntity.ScriptEntityHelper.s_FunctionRepository.GetFunctionParameterCount(functionName) :
+                      ItemManager.s_FunctionRepository.GetFunctionParameterCount(functionName);
 
                     if (numValidParameters == -1)
                     {
@@ -951,20 +981,21 @@ namespace SimpleScript
 
                     // Check facing entity
                     var direction = _attachedEntity._Direction;
+                    var targetPosition = currentTarget._TilePosition;
                     var validFacing = false;
                     switch (direction)
                     {
                       case 0:
-                        validFacing = currentTarget._TilePosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z + 1));
+                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z + 1));
                         break;
                       case 1:
-                        validFacing = currentTarget._TilePosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z - 1));
+                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z - 1));
                         break;
                       case 2:
-                        validFacing = currentTarget._TilePosition.Equals((_attachedEntity._TilePosition.x + 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
+                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x + 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
                         break;
                       case 3:
-                        validFacing = currentTarget._TilePosition.Equals((_attachedEntity._TilePosition.x - 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
+                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x - 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
                         break;
                     }
                     if (!validFacing)
@@ -973,13 +1004,15 @@ namespace SimpleScript
                       break;
                     }
 
-                    // Fire function
-                    Debug.Log($"Firing entity function: {currentTarget._EntityTypeData.Name}:{functionName}");
+                    //// TODO pass parameters to entity/item functions
 
-                    var entityScript = currentTarget.LoadAndAttachScript(new ScriptLoadData()
+                    // Fire function
+                    Debug.Log($"Firing entity function: {currentTarget._Type}:{functionName}");
+
+                    var entityScript = currentTarget._ScriptEntity.LoadAndAttachScript(new ScriptLoadData()
                     {
-                      PathTo = $"{currentTarget._EntityTypeData.Name.ToLower()}.{functionName}",
-                      IsServerScript = true
+                      PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
+                      ScriptType = ScriptType.ENTITY
                     });
                     entityScript._parentScript = this;
                     entityScript._variables.Add("_entity", $"_:get({_attachedEntity._EntityData.Id})");
@@ -1001,6 +1034,41 @@ namespace SimpleScript
 
                     // Tick script now!
                     entityScript.Tick();
+
+                    break;
+                  }
+
+                  // Item function
+                  else if (isItemFunction)
+                  {
+
+                    // Fire function
+                    Debug.Log($"Firing item function: {currentTarget._Type}:{functionName}");
+
+                    var itemScript = _attachedEntity.LoadAndAttachScript(new ScriptLoadData()
+                    {
+                      PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
+                      ScriptType = ScriptType.ITEM
+                    });
+                    itemScript._parentScript = this;
+
+                    // Check for variable
+                    if (parameterCheck)
+                    {
+                      _externalReturnStatement = statement;
+                      _externalLine = line;
+                    }
+
+                    // If looking for return statement, keep line index the same to re-fire function until it returns data
+                    if (parameterCheck)
+                      _lineIndex--;
+
+                    // Wait for script to complete
+                    breakLoop = true;
+                    _isEnabled = false;
+
+                    // Tick script now!
+                    itemScript.Tick();
 
                     break;
                   }
@@ -1070,47 +1138,6 @@ namespace SimpleScript
                       break;
                     }
                   }
-
-                  // Unity functions
-                  else
-                    switch (functionName)
-                    {
-
-                      case "GetById":
-
-                        if (!serverAuthenticated)
-                        {
-                          logError("Not authenticated!");
-                          break;
-                        }
-
-                        var useId = int.Parse(functionParameters[0]);
-                        if (parameterCheck)
-                          returnStatement = $"$Entity[{useId}]";
-                        else
-                        {
-                          currentTarget = ScriptEntity.GetEntity(useId);
-                          currentTargetDepth = i;
-                        }
-
-                        break;
-
-                      // Editor; place
-                      case "Place":
-
-                        if (!serverAuthenticated)
-                        {
-                          logError("Not authenticated!");
-                          break;
-                        }
-
-                        var entityType = int.Parse(functionParameters[0]);
-                        var entityPosition = new Vector3(int.Parse(functionParameters[1]), int.Parse(functionParameters[3]), int.Parse(functionParameters[2])); // xzy ... swapped from usual xyz
-
-                        new ScriptEntity(entityType, entityPosition, -1);
-                        break;
-                    }
-
 
                   break;
               }
@@ -1407,66 +1434,95 @@ namespace SimpleScript
         (ScriptBase script, string accessor, string[] parameters) =>
         {
           // Validate accessor
-          if (accessor == "")
+          switch (accessor)
           {
 
-            // Validate parameters
-            if (parameters.Length != 0)
-            {
-              return SystemFunctionReturnData.InvalidParameters(0);
-            }
+            // Get in front of entity
+            case "":
+              // Validate parameters
+              if (parameters.Length != 0)
+              {
+                return SystemFunctionReturnData.InvalidParameters(0);
+              }
 
-            // Get entity in front of current entity based on direction
-            var direction = script._AttachedEntity._EntityData.Direction;
-            var usePosition = script._AttachedEntity._TilePosition;
-            switch (direction)
-            {
-              case 0: usePosition.Item3 += 1; break;
-              case 1: usePosition.Item3 -= 1; break;
-              case 2: usePosition.Item1 -= 1; break;
-              case 3: usePosition.Item1 += 1; break;
-            }
+              // Get entity in front of current entity based on direction
+              var direction = script._AttachedEntity._EntityData.Direction;
+              var usePosition = script._AttachedEntity._TilePosition;
+              switch (direction)
+              {
+                case 0: usePosition.Item3 += 1; break;
+                case 1: usePosition.Item3 -= 1; break;
+                case 2: usePosition.Item1 -= 1; break;
+                case 3: usePosition.Item1 += 1; break;
+              }
 
-            var entity = ScriptEntity.GetEntity(usePosition);
-            if (entity == null)
-            {
-              return SystemFunctionReturnData.NullReference();
-            }
+              var entity = ScriptEntity.GetEntity(usePosition);
+              if (entity == null)
+              {
+                return SystemFunctionReturnData.NullReference();
+              }
 
-            // Return found entity
-            else
-            {
-              return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
-            }
-          }
+              // Return found entity
+              else
+              {
+                return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
+              }
 
-          else if (accessor == "_")
-          {
-            // Validate parameters
-            if (parameters.Length != 1)
-            {
-              return SystemFunctionReturnData.InvalidParameters(1);
-            }
+            // Inventory
+            case "items":
 
-            // Get entity by id
-            var entityId = parameters[0];
-            var entity = ScriptEntity.GetEntity(int.Parse(entityId));
-            if (entity == null)
-            {
-              return SystemFunctionReturnData.NullReference();
-            }
+              // Validate parameters
+              if (parameters.Length != 1)
+              {
+                return SystemFunctionReturnData.InvalidParameters(1);
+              }
 
-            // Return found entity
-            else
-            {
-              return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
-            }
-          }
+              var itemSlot = int.Parse(parameters[0]);
 
-          // Invalid accessor
-          else
-          {
-            return SystemFunctionReturnData.InvalidFunction();
+              // Get item
+              var items = script._AttachedEntity._EntityData.ItemStorage;
+              Item item = null;
+              if (items != null && itemSlot < items.Count)
+              {
+                item = items[itemSlot];
+              }
+              if (item == null)
+              {
+                return SystemFunctionReturnData.Custom($"Item not found at index: {itemSlot}");
+              }
+
+              // Return found entity
+              else
+              {
+                return SystemFunctionReturnData.Success(GetItemStatement(item), 0);
+              }
+
+            // System
+            case "_":
+
+              // Validate parameters
+              if (parameters.Length != 1)
+              {
+                return SystemFunctionReturnData.InvalidParameters(1);
+              }
+
+              // Get entity by id
+              var entityId = parameters[0];
+              entity = ScriptEntity.GetEntity(int.Parse(entityId));
+              if (entity == null)
+              {
+                return SystemFunctionReturnData.NullReference();
+              }
+
+              // Return found entity
+              else
+              {
+                return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
+              }
+
+            // Invalid accessor
+            default:
+              return SystemFunctionReturnData.InvalidFunction();
           }
         }
       );
@@ -1571,6 +1627,38 @@ namespace SimpleScript
     static string GetEntityStatement(ScriptEntity entity)
     {
       return $"$Entity[{entity._EntityData.Id}]";
+    }
+
+    // Function for validating item variable
+    public static bool IsValidVariableItem(string variable)
+    {
+      return variable.StartsWith("$Item[") && variable.EndsWith("]");
+    }
+
+    // Function for getting entity from variable
+    static Item GetItemByStatement(string statement_)
+    {
+      statement_ = statement_.Trim();
+      if (IsValidVariableItem(statement_))
+        return ItemManager.GetItem(int.Parse(statement_.Split("$Item[")[1][..^1]));
+      return null;
+    }
+    static Item GetItemById(int id)
+    {
+      return ItemManager.GetItem(id);
+    }
+    static Item GetItemByIdOrStatement(string idOrStatement)
+    {
+      if (IsValidVariableItem(idOrStatement))
+        return GetItemByStatement(idOrStatement);
+      else if (int.TryParse(idOrStatement, out var id))
+        return GetItemById(id);
+      return null;
+    }
+
+    static string GetItemStatement(Item item)
+    {
+      return $"$Item[{item._ItemData.Id}]";
     }
 
     // Variable applied to entities and can be referened in scripts (ex: health)

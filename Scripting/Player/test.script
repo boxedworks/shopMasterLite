@@ -1,0 +1,16 @@
+
+down()
+
+var fence = get()
+
+var j = fence:jump()
+log(j)
+
+sleep(1)
+
+up()
+
+fence:jump()
+log(j)
+
+log(item)

@@ -1,9 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-using System.Linq;
-
 using CustomUI;
+using System.Linq;
 
 namespace SimpleScript
 {
@@ -20,16 +19,14 @@ namespace SimpleScript
     public static Dictionary<int, ScriptEntity> s_ScriptEntities;
     public static Dictionary<(int, int, int), List<ScriptEntity>> s_ScriptEntitiesMapped;
 
-    // Holds all function data
-    static Dictionary<string, FunctionData> s_functionData;
-    static Dictionary<int, string> s_functionMapping;
-
     // Holds saveable entity data
     public EntityData _EntityData;
     public EntityTypeData _EntityTypeData { get { return ScriptEntityHelper.GetEntityTypeData(this); } }
     public int _EntityType { get { return _EntityTypeData.Id; } }
     public (int x, int y, int z) _TilePosition { get { return (_EntityData.X, _EntityData.Y, _EntityData.Z); } }
     public int _Direction { get { return _EntityData.Direction; } }
+    public List<Item> _Storage { get { return _EntityData.ItemStorage; } }
+    public bool _HasStorage { get { return (_Storage?.Count ?? 0) > 0; } }
     bool _spawned;
 
     Transform transform;
@@ -233,6 +230,12 @@ namespace SimpleScript
       var keys = new List<int>(s_ScriptEntities.Keys);
       foreach (var key in keys)
       {
+        if (!s_ScriptEntities.ContainsKey(key))
+        {
+          Debug.LogWarning($"Trying to tick non-existant entity[{key}]!");
+          continue;
+        }
+
         var entity = s_ScriptEntities[key];
         entity.Tick();
       }
@@ -344,21 +347,7 @@ namespace SimpleScript
 
       // Public functions are how entities can interact with other entities
       [System.NonSerialized]
-      public int[] PublicFunctionIds,
-
-      // Private functions are actions that the server uses to interact with entities; they are the same as public but only server can execute (ex; monsters walking)
-      PrivateFunctionIds;
-    }
-
-    [System.Serializable]
-    public struct FunctionData
-    {
-      public int Id;
-
-      public string Name;
-      public int ParameterCount;
-
-      public string Description;
+      public int[] PublicFunctionIds;
     }
 
     public static class ScriptEntityHelper
@@ -370,10 +359,6 @@ namespace SimpleScript
         {
           return s_entityDataWrapper._EntityTypeData;
         }
-        set
-        {
-          s_entityDataWrapper._EntityTypeData = value;
-        }
       }
       [System.Serializable]
       struct EntityTypeDataWrapper
@@ -382,11 +367,17 @@ namespace SimpleScript
       }
       static EntityTypeDataWrapper s_entityDataWrapper;
 
+
+      //
+      public static FunctionRepository s_FunctionRepository;
+
       //
       public static void Init()
       {
         s_ScriptEntities = new();
         s_ScriptEntitiesMapped = new();
+
+        s_FunctionRepository = new();
 
         LoadTypeData();
       }
@@ -394,67 +385,22 @@ namespace SimpleScript
       // Load objects from json
       public static void LoadTypeData()
       {
-        s_functionData = new();
-        s_functionMapping = new();
-        void AddFunction(string name, string description, int parameterCount)
-        {
-          var functionId = s_functionData.Count;
-          s_functionMapping.Add(functionId, name);
-          s_functionData.Add(name, new FunctionData()
-          {
-            Id = functionId,
-
-            Name = name,
-            ParameterCount = parameterCount,
-
-            Description = description,
-          });
-        }
-
-        // Load entity (server) functions
-        Dictionary<string, List<string>> entityFunctions = new();
-        foreach (var entityScript in ScriptManager.GetServerScripts())
-        {
-          var entityScriptName = entityScript.Split(@"/")[^1];
-          var entityScriptData = entityScriptName.Split(".");
-
-          var entityType = entityScriptData[0];
-          var entityFunctionName = entityScriptData[1];
-
-          // Load number of params
-          var entityScriptRaw = ScriptManager.LoadServerScript(entityScriptName);
-          var numParams = 0;
-          foreach (var line in entityScriptRaw.Split("\n"))
-          {
-            var lineUse = line.Trim();
-            if (lineUse.StartsWith("$SetNumParams(") && lineUse.EndsWith(")"))
-            {
-              numParams = int.Parse(line.Split("$SetNumParams(")[^1][..^2]);
-            }
-          }
-
-          // Add function data
-          Debug.Log($"Loaded server script {entityScriptName} with {numParams} params");
-          AddFunction(entityFunctionName, "System loaded...", numParams);
-          if (!entityFunctions.ContainsKey(entityType))
-            entityFunctions.Add(entityType, new());
-          entityFunctions[entityType].Add(entityFunctionName);
-        }
+        var functionsByType = s_FunctionRepository.Load(true);
 
         // Load in entity type data
         var rawText = System.IO.File.ReadAllText("entityTypeData.json");
         var jsonData = JsonUtility.FromJson<EntityTypeDataWrapper>(rawText);
         s_entityDataWrapper = jsonData;
 
-        // Load functions per entity type
+        // Match functions per entity type
         for (var i = 0; i < s_entityTypeData.Count; i++)
         {
           var entityTypeData = s_entityTypeData[i];
           var functionIds = new List<int>();
-          if (entityFunctions.ContainsKey(entityTypeData.Name.ToLower()))
-            foreach (var func in entityFunctions[entityTypeData.Name.ToLower()])
+          if (functionsByType.ContainsKey(entityTypeData.Name.ToLower()))
+            foreach (var func in functionsByType[entityTypeData.Name.ToLower()])
             {
-              var id = GetFunctionId(func);
+              var id = s_FunctionRepository.GetFunctionId(func);
               functionIds.Add(id);
             }
           var publicFunctionIds = functionIds.ToArray();
@@ -481,34 +427,12 @@ namespace SimpleScript
       }
 
       //
-      static int GetFunctionId(string functionName)
+      public static bool HasFunction(ScriptEntity entity, string functionName)
       {
-        return s_functionData[functionName].Id;
-      }
-      static string GetFunctionName(int functionId)
-      {
-        return s_functionMapping[functionId];
-      }
-      public static bool HasFunction(ScriptEntity entity, string functionName, bool publicFunctions = true)
-      {
-        var functionId = GetFunctionId(functionName);
-        var entityTypeData = entity._EntityTypeData;
-        var functions = publicFunctions ? entityTypeData.PublicFunctionIds : entityTypeData.PrivateFunctionIds;
+        var functionId = s_FunctionRepository.GetFunctionId(functionName);
+        var typeData = entity._EntityTypeData;
+        var functions = typeData.PublicFunctionIds;
         return functions.Contains(functionId);
-      }
-
-      public static FunctionData GetFunctionData(string functionName)
-      {
-        return s_functionData[functionName];
-      }
-      public static FunctionData GetFunctionData(int functionId)
-      {
-        return GetFunctionData(GetFunctionName(functionId));
-      }
-
-      public static int GetFunctionParameterCount(string functionName)
-      {
-        return GetFunctionData(functionName).ParameterCount;
       }
     }
 
@@ -645,9 +569,13 @@ namespace SimpleScript
     // Load and attach script to entity
     public ScriptManager.ScriptBase LoadAndAttachScript(ScriptManager.ScriptLoadData scriptLoadData)
     {
-      var rawScript = (scriptLoadData.Headers != null ? scriptLoadData.Headers + "\n" : "") + (scriptLoadData.IsServerScript ?
-          ScriptManager.LoadServerScript(scriptLoadData.PathTo) :
-          ScriptManager.LoadScript(scriptLoadData.PathTo));
+      var rawScript = (scriptLoadData.Headers != null ? scriptLoadData.Headers + "\n" : "") + (scriptLoadData.ScriptType switch
+      {
+        ScriptManager.ScriptType.ENTITY => ScriptManager.LoadSystemEntityScript(scriptLoadData.PathTo),
+        ScriptManager.ScriptType.ITEM => ScriptManager.LoadSystemItemScript(scriptLoadData.PathTo),
+
+        _ => ScriptManager.LoadPlayerScript(scriptLoadData.PathTo)
+      });
 
       return ScriptManager.s_Singleton.AttachScriptTo(
         this,

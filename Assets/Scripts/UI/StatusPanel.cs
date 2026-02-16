@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using SimpleScript;
 using UnityEngine;
 using UnityEngine.UI;
@@ -143,7 +142,7 @@ namespace CustomUI
         }
 
         // Gather buttons
-        var hasInventory = _entity._EntityData.ItemStorage != null;
+        var hasInventory = _entity._HasStorage;
         var hasLog = true;
         int buttonCount = (hasInventory ? 1 : 0) + (hasLog ? 1 : 0);
         var buttonList = new List<GameObject>();
@@ -198,7 +197,7 @@ namespace CustomUI
       var panel = GameObject.Instantiate(panelBase, _panel.GetChild(1)).transform as RectTransform;
 
       // Create status based on size
-      var entityStorage = _entity._EntityData.ItemStorage;
+      var entityStorage = _entity._Storage;
       var itemSlots = new List<GameObject>();
 
       var statusSize = entityStorage.Count;
@@ -243,7 +242,7 @@ namespace CustomUI
         }
 
       // Item slots
-      var itemDataList = _entity._EntityData.ItemStorage;
+      var itemDataList = _entity._Storage;
       for (int i = 0; i < itemDataList.Count; i++)
       {
         var itemData = itemDataList[i];

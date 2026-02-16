@@ -6,6 +6,8 @@ else
   _:move(_entity, _entity.x, _entity.z - 2, _entity.y)
 end
 
-sleep(12)
+_:giveItem(_entity, 0)
 
-exit()
+sleep(1)
+
+exit(4)
