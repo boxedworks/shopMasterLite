@@ -21,7 +21,7 @@ namespace CustomUI
     RectTransform _draggingPanel;
     Vector3 _dragDelta;
 
-    public GameObject _InventoryPanel;
+    public GameObject _StatusPanel, _InventoryPanel, _LoggerPanel;
 
     //
     public UIElements()
@@ -32,11 +32,19 @@ namespace CustomUI
       _UI = GameObject.Find("UI").GetComponent<RectTransform>();
       _graphicRaycaster = _UI.GetComponent<GraphicRaycaster>();
 
-      _InventoryPanel = _UI.Find("InventoryPanels").GetChild(0).gameObject;
+      var statusPanels = _UI.Find("StatusPanels");
+
+      _StatusPanel = statusPanels.GetChild(0).gameObject;
+      _StatusPanel.SetActive(false);
+
+      _InventoryPanel = statusPanels.GetChild(1).gameObject;
       _InventoryPanel.SetActive(false);
 
+      _LoggerPanel = statusPanels.GetChild(2).gameObject;
+      _LoggerPanel.SetActive(false);
+
       // Initialize other UI systems
-      new InventoryPanel.InventoryPanelManager();
+      new StatusPanel.StatusPanelManager();
     }
 
     //

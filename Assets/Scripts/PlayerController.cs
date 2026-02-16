@@ -93,7 +93,7 @@ public class PlayerController
         _selectedEntity = entity;
 
         if (_selectedEntity != null)
-          InventoryPanel.InventoryPanelManager.TryCreateInventoryForEntity_S(_selectedEntity);
+          StatusPanel.StatusPanelManager.TryCreateStatusForEntity_S(_selectedEntity);
       }
     }
 

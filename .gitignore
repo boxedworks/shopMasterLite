@@ -64,6 +64,9 @@ ExportedObj/
 
 *.inputactions
 *.asset
+*.mat
+
+*.png
 
 # Unity3D generated meta files
 *.meta
