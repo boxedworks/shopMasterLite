@@ -3,6 +3,8 @@ using UnityEngine;
 
 using System.Linq;
 
+using CustomUI;
+
 namespace SimpleScript
 {
 
@@ -69,7 +71,7 @@ namespace SimpleScript
 
         OwnerId = ownerId,
 
-        ItemStorage = new(),
+        //ItemStorage = new(),
 
         EntityVariables_Int = new(),
 
@@ -313,6 +315,9 @@ namespace SimpleScript
 
       // Item storage
       public List<Item> ItemStorage;
+
+      // Logger
+      public List<string> Log;
 
       // Holds entity's variables that can be referenced in scripts
       public List<ScriptManager.EntityVariable_Int> EntityVariables_Int;
@@ -651,10 +656,35 @@ namespace SimpleScript
       );
     }
 
-    // Update menus associated with entities; ex: inventory panel
+    //
+    public void AppendLog(string message)
+    {
+      var maxLogSize = 10;
+
+      _EntityData.Log ??= new();
+      var log = _EntityData.Log;
+
+      // Append new message
+      log.Add(message);
+
+      // Remove oldest message if exceeds max log size
+      if (log.Count > maxLogSize)
+        log.RemoveAt(0);
+
+      //
+      StatusPanel.StatusPanelManager.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Logger);
+    }
+    public string GetLogString()
+    {
+      if (_EntityData.Log == null)
+        return "";
+      return string.Join("\n", _EntityData.Log);
+    }
+
+    // Update menus associated with entities; ex: status panel
     public void UpdateUIs()
     {
-      CustomUI.InventoryPanel.InventoryPanelManager.TryReplaceInventoryPanel_S(this);
+      StatusPanel.StatusPanelManager.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Inventory);
     }
 
   }

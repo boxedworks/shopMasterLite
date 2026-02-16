@@ -31,6 +31,11 @@ namespace SimpleScript
     public static Item GiveItem(ScriptEntity entity, int itemId)
     {
       var storage = entity._EntityData.ItemStorage;
+      if (storage == null)
+      {
+        Debug.LogError("Entity has no item storage!");
+        return null;
+      }
       for (var i = 0; i < storage.Count; i++)
       {
         if (storage[i] != null)

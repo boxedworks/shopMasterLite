@@ -59,9 +59,26 @@ namespace SimpleScript
       return newScript;
     }
 
-    public void RemoveScript(int scriptId)
+    static void RemoveScript(int scriptId, string returnData = null)
     {
-      _scripts.Remove(scriptId);
+      // Delete script
+      var script = s_Singleton._scripts[scriptId];
+      script.RemoveScript();
+      s_Singleton._scripts.Remove(scriptId);
+
+      // Check for parent scripts
+      var parentScript = script._ParentScript;
+      if (parentScript != null)
+      {
+        parentScript._ExternalReturnData = returnData;
+        parentScript.Enable();
+        parentScript.Tick();
+      }
+    }
+    //
+    static void RemoveScript(ScriptBase script, string returnData = null)
+    {
+      RemoveScript(script._Id, returnData);
     }
 
     const string _SCRIPTING_PATH = @"Scripting/";
@@ -107,15 +124,31 @@ namespace SimpleScript
     {
       public int _Id, _OwnerId;
       string _codeRaw;
-      bool _enabled;
+      bool _isEnabled;
       public void Enable()
       {
-        if (_enabled)
+        if (_isEnabled)
         {
           Debug.LogWarning($"Script [{_Id}] is already enabled!");
         }
 
-        _enabled = true;
+        _isEnabled = true;
+      }
+      public void Disable()
+      {
+        if (!_isEnabled)
+        {
+          Debug.LogWarning($"Script [{_Id}] is already disabled!");
+        }
+
+        _isEnabled = false;
+      }
+
+      //
+      bool _isValid;
+      public void RemoveScript()
+      {
+        _isValid = false;
       }
 
       // Lines in the script
@@ -128,9 +161,17 @@ namespace SimpleScript
         _lineDepth,
 
         // The depth of the line that can be read
-        _logicDepth;
+        _logicDepth,
+
+        // Last tick ran
+        _lastTick;
 
       Dictionary<string, string> _variables;
+
+      string _externalReturnData;
+      public string _ExternalReturnData { set { _externalReturnData = value; } get { return _externalReturnData; } }
+      string _externalReturnStatement;
+      string _externalLine;
 
       ScriptEntity _attachedEntity;
       public ScriptEntity _AttachedEntity { get { return _attachedEntity; } }
@@ -148,7 +189,8 @@ namespace SimpleScript
         Init();
 
         //
-        _enabled = true;
+        _isEnabled = true;
+        _isValid = true;
       }
 
       //
@@ -161,15 +203,28 @@ namespace SimpleScript
         {
           { "this", GetEntityStatement(_attachedEntity) }
         };
+
+        //
+        _externalReturnData = _externalReturnStatement = _externalLine = null;
       }
 
       // Parse simplescript
       public void Tick()
       {
 
+        //Debug.Log($"Attempting to tick script: {_attachedEntity._EntityTypeData.Name}");
+
         // Check can tick
-        if (!_enabled) return;
+        if (!_isEnabled || !_isValid) return;
         if (!_attachedEntity._CanTick) return;
+
+        var currentTick = GameController.s_CurrentTick;
+        if (_lastTick == currentTick)
+        {
+          Debug.LogWarning($"Attempting to tick [{_attachedEntity._EntityTypeData.Name}] more than 1nce per tick");
+          return;
+        }
+        _lastTick = currentTick;
 
         //Debug.Log($"Ticking script [{_Id}] for entity [{_attachedEntity._EntityData.Id}]");
 
@@ -191,6 +246,30 @@ namespace SimpleScript
           var line = _lines[_lineIndex++].Trim();
           var lineOriginal = line;
 
+          // Check external return statement
+          if (_externalReturnData != null)
+          {
+            //Debug.Log($"External return data found.. replacing: {_externalReturnData} [{_externalReturnStatement}] ........... {line}");
+
+            // Check error
+            if (_ExternalReturnData.StartsWith("E! "))
+            {
+              var error = _ExternalReturnData[3..];
+              logError(error);
+              break;
+            }
+
+            // Substitute return data into statement
+            if (_externalReturnStatement != null)
+            {
+              int statementPos = _externalLine.IndexOf(_externalReturnStatement);
+              line = _externalLine.Remove(statementPos, _externalReturnStatement.Length).Insert(statementPos, _externalReturnData);
+            }
+
+            // Clear external return data
+            _externalReturnData = _externalReturnStatement = _externalLine = null;
+          }
+
           // Log error
           void logError(string error)
           {
@@ -198,11 +277,11 @@ namespace SimpleScript
             // Log
             var errorString = $"Line [{_lineIndex}]: [{lineOriginal}] [{error}]";
             Debug.LogError(errorString);
-            Terminal.s_Singleton.LogMessage($"<color=red>{errorString}</color>");
+            _attachedEntity.AppendLog($"<color=red>{errorString}</color>");
 
             // Exit loop and remove script
             breakLoop = true;
-            s_Singleton._scripts.Remove(_Id);
+            ScriptManager.RemoveScript(this, $"E! {error}");
           }
 
           // Check blank line
@@ -276,6 +355,7 @@ namespace SimpleScript
               }
 
               var value = HandleStatement(lineSplit[1].Trim(), true);
+              if (breakLoop) break;
               _variables.Add(variable, value);
               continue;
             }
@@ -301,6 +381,7 @@ namespace SimpleScript
               }
 
               var value = HandleStatement(lineSplit[1].Trim(), true);
+              if (breakLoop) break;
               _variables[variable] = value;
               continue;
             }
@@ -438,6 +519,7 @@ namespace SimpleScript
 
               // Evaluate
               var evaluate = GetLogic(logicVal0, logicVal1, logicOperator);
+              if (breakLoop) break;
 
               // Base master value
               if (!logicInit)
@@ -516,6 +598,8 @@ namespace SimpleScript
               lastLogicDepth = logicDepth;
 
             }
+
+            if (breakLoop) break;
 
             // If true, go inside of if statement +1 depth
             _lineDepth++;
@@ -639,6 +723,14 @@ namespace SimpleScript
                     //     returnStatement = GetEntityStatement(currentTarget);
                     //   break;
                     // }
+
+                    // Check number
+                    if (int.TryParse(word, out _))
+                    {
+                      if (parameterCheck)
+                        returnStatement = word;
+                      continue;
+                    }
 
                     // Check entity variable
                     if (IsValidVariableEntity(word))
@@ -789,6 +881,8 @@ namespace SimpleScript
                     }
                   }
 
+                  if (breakLoop) break;
+
                   // Validate function exists
                   var isValidFunction = false;
                   var isEntityFunction = false;
@@ -879,7 +973,6 @@ namespace SimpleScript
                       break;
                     }
 
-
                     // Fire function
                     Debug.Log($"Firing entity function: {currentTarget._EntityTypeData.Name}:{functionName}");
 
@@ -891,9 +984,24 @@ namespace SimpleScript
                     entityScript._parentScript = this;
                     entityScript._variables.Add("_entity", $"_:get({_attachedEntity._EntityData.Id})");
 
-                    // Wait for function to complete
+                    // Check for variable
+                    if (parameterCheck)
+                    {
+                      _externalReturnStatement = statement;
+                      _externalLine = line;
+                    }
+
+                    // If looking for return statement, keep line index the same to re-fire function until it returns data
+                    if (parameterCheck)
+                      _lineIndex--;
+
+                    // Wait for script to complete
                     breakLoop = true;
-                    _enabled = false;
+                    _isEnabled = false;
+
+                    // Tick script now!
+                    entityScript.Tick();
+
                     break;
                   }
 
@@ -905,12 +1013,8 @@ namespace SimpleScript
                     var systemReturnData = systemFunction.Execute(this, accessorLastSave, functionParameters.ToArray());
                     var returnData = systemReturnData.Data;
 
-                    tickCooldown = systemReturnData.TickCooldown;
-                    if (returnData == null)
-                    {
-                      breakLoop = true;
-                      break;
-                    }
+                    var systemTickCooldown = systemReturnData.TickCooldown;
+                    tickCooldown = systemTickCooldown > -1 ? systemTickCooldown : 0;
 
                     // Check script removed
                     if (!s_Singleton._scripts.ContainsKey(_Id))
@@ -919,41 +1023,52 @@ namespace SimpleScript
                       break;
                     }
 
-                    // Handle system function errors
-                    if (returnData.StartsWith("!E"))
+                    if (returnData != null)
                     {
-                      var errorData = returnData.Split("!E")[1].Split(" ");
-                      var errorCode = errorData[0];
-                      switch (errorCode)
+
+                      // Handle system function errors
+                      if (returnData.StartsWith("!E"))
                       {
-                        case "1000":
-                          logError($"Function {accessorLastSave}.{functionName} not defined");
-                          break;
-                        case "1001":
-                          var numValidParameters = int.Parse(errorData[1]);
-                          logError($"Invalid number of parameters [{functionParameters.Count}] got for function [{functionName}], {numValidParameters} expected");
-                          break;
-                        case "1002":
-                          logError($"Null reference in [{functionName}]");
-                          break;
+                        var errorData = returnData.Split("!E")[1].Split(" ");
+                        var errorCode = errorData[0];
+                        switch (errorCode)
+                        {
+                          case "1000":
+                            logError($"Function {accessorLastSave}.{functionName} not defined");
+                            break;
+                          case "1001":
+                            var numValidParameters = int.Parse(errorData[1]);
+                            logError($"Invalid number of parameters [{functionParameters.Count}] got for function [{functionName}], {numValidParameters} expected");
+                            break;
+                          case "1002":
+                            logError($"Null reference in [{functionName}]");
+                            break;
 
 
-                        case "9000":
-                          var customError = string.Join(" ", errorData[1..]);
-                          logError($"{customError}");
-                          break;
-                        case "9999":
-                          logError($"Not implemented: [{functionName}]");
-                          break;
+                          case "9000":
+                            var customError = string.Join(" ", errorData[1..]);
+                            logError($"{customError}");
+                            break;
+                          case "9999":
+                            logError($"Not implemented: [{functionName}]");
+                            break;
 
-                        default:
-                          logError($"Unknown error: {errorCode}");
-                          break;
+                          default:
+                            logError($"Unknown error: {errorCode}");
+                            break;
+                        }
                       }
+
+                      if (parameterCheck)
+                        returnStatement = returnData;
                     }
 
-                    if (parameterCheck)
-                      returnStatement = returnData;
+                    //
+                    if (systemTickCooldown != 0)
+                    {
+                      breakLoop = true;
+                      break;
+                    }
                   }
 
                   // Unity functions
@@ -1000,8 +1115,7 @@ namespace SimpleScript
                   break;
               }
 
-              if (breakLoop)
-                break;
+              if (breakLoop) break;
             }
 
             return returnStatement;
@@ -1009,8 +1123,7 @@ namespace SimpleScript
           HandleStatement(line, false);
 
           //
-          if (breakLoop)
-            break;
+          if (breakLoop) break;
         }
 
         // Apply tick cooldown
@@ -1118,9 +1231,9 @@ namespace SimpleScript
 
           var logMessage = parameters[0];
           Debug.Log(logMessage);
-          Terminal.s_Singleton.LogMessage(logMessage);
+          script._AttachedEntity.AppendLog(logMessage);
 
-          return SystemFunctionReturnData.Success();
+          return SystemFunctionReturnData.Success(0);
         }
       );
 
@@ -1137,19 +1250,19 @@ namespace SimpleScript
           }
 
           // Validate parameters
-          if (parameters.Length != 0)
+          if (parameters.Length > 1)
           {
-            return SystemFunctionReturnData.InvalidParameters(0);
+            return SystemFunctionReturnData.InvalidParameters(1);
           }
 
-          // Delete script
-          s_Singleton._scripts.Remove(script._Id);
+          // Check return statement
+          var returnData = parameters.Length == 1 ? parameters[0] : null;
+          Debug.Log($"Script exit called with return data: {returnData}");
 
-          // Check for parent scripts
-          var parentScript = script._ParentScript;
-          parentScript?.Enable();
+          // Remove script
+          RemoveScript(script, returnData);
 
-          return SystemFunctionReturnData.Success(0);
+          return SystemFunctionReturnData.Success(-1);
         }
       );
 
@@ -1192,7 +1305,7 @@ namespace SimpleScript
                   script._OwnerId
                 );
 
-                return SystemFunctionReturnData.Success(0);
+                return SystemFunctionReturnData.Success(-1);
 
               // System-level move; move(4, 0, 0, 1)
               case "_":
@@ -1376,9 +1489,13 @@ namespace SimpleScript
             return SystemFunctionReturnData.InvalidParameters(1);
           }
 
-          var ticks = int.Parse(parameters[0]);
-          return SystemFunctionReturnData.Success(ticks);
+          // Validation error
+          if (!int.TryParse(parameters[0], out var ticks) || ticks < 0)
+          {
+            throw new NotImplementedException();
+          }
 
+          return SystemFunctionReturnData.Success(ticks);
         }
       );
 
