@@ -224,6 +224,23 @@ namespace SimpleScript
       entity._spawned = false;
     }
 
+    // Update all entities
+    public static void UpdateScriptEntities()
+    {
+      var keys = new List<int>(s_ScriptEntities.Keys);
+      foreach (var key in keys)
+      {
+        if (!s_ScriptEntities.ContainsKey(key))
+        {
+          Debug.LogWarning($"Trying to update non-existant entity[{key}]!");
+          continue;
+        }
+
+        var entity = s_ScriptEntities[key];
+        entity.Update();
+      }
+    }
+
     // Tick update all entities
     public static void TickScriptEntities()
     {
@@ -242,26 +259,65 @@ namespace SimpleScript
     }
 
     // Load model from entity type
+    Transform _billboard;
     void LoadModel()
     {
       var modelName = _EntityTypeData.Name;
 
-      var displayModel = new GameObject();//GameObject.Instantiate(Resources.Load($"Objects/{modelName}")) as GameObject;
-      displayModel.name = modelName;
+      var displayModel = new GameObject
+      {
+        name = modelName
+      };
       transform = displayModel.transform;
 
-      var mainSphere = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-      mainSphere.transform.parent = transform;
-      mainSphere.transform.localPosition = Vector3.zero;
-      mainSphere.transform.localScale = Vector3.one * 0.7f;
+      _billboard = new GameObject().transform;
+      var sprite = new GameObject();
+      sprite.transform.parent = _billboard;
 
-      var look = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-      look.transform.parent = transform;
-      look.transform.localPosition = new Vector3(0, 0.3f, 0.4f);
-      look.transform.localScale = Vector3.one * 0.12f;
+      var spriteRenderer = sprite.AddComponent<SpriteRenderer>();
+      spriteRenderer.sprite = Resources.Load<Sprite>($"Images/Entities/{modelName}");
 
       // Set initial position
       transform.position = new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z);
+    }
+
+    //
+    float _shakeTime, _shakeIntensity;
+    void Update()
+    {
+      _billboard.LookAt(GameResources._MainCamera.transform);
+
+      // Lerp position
+      var dis = transform.position - _billboard.position;
+      if (dis.magnitude > 0.05f)
+      {
+        _billboard.position += 2f * Time.deltaTime * dis.normalized;
+      }
+      else
+      {
+        _billboard.position = transform.position;
+      }
+
+      // Check shake
+      var sprite = _billboard.GetChild(0);
+      if (_shakeTime > 0f)
+      {
+        _shakeTime -= Time.deltaTime;
+        var shakeDisplacement = Random.insideUnitSphere * _shakeIntensity * 0.2f;
+
+        sprite.localPosition = shakeDisplacement;
+      }
+      else
+      {
+        sprite.localPosition = Vector3.zero;
+      }
+    }
+
+    //
+    public void Shake(float time, float intensity)
+    {
+      _shakeTime = time;
+      _shakeIntensity = intensity;
     }
 
     // Increment any scripts on the entity per tick

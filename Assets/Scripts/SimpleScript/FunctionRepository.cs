@@ -55,7 +55,7 @@ namespace SimpleScript
         }
 
         // Add function data
-        Debug.Log($"Loaded script [{isEntityScripts}] {fileName} with {numParams} params");
+        Debug.Log($"Loaded script [Entity script = {isEntityScripts}] {fileName} with {numParams} params");
         AddFunction(functionName, "System loaded...", numParams);
         if (!functionsByType.ContainsKey(objectName))
           functionsByType.Add(objectName, new());

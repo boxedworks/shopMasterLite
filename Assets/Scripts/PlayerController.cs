@@ -22,7 +22,7 @@ public class PlayerController
   {
     s_Singleton = this;
 
-    _camera = Camera.main;
+    _camera = GameResources._MainCamera;
 
     _mouseSelectorUI = GameObject.Find("MouseSelector");
     _mouseSelectedUI = GameObject.Find("MouseSelected");

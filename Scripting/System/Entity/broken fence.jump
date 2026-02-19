@@ -1,12 +1,8 @@
-$SetNumParams(0)
-
 if(_entity.z < this.z)
   _:move(_entity, _entity.x, _entity.z + 2, _entity.y)
 else
   _:move(_entity, _entity.x, _entity.z - 2, _entity.y)
 end
-
-_:giveItem(_entity, 0)
 
 sleep(1)
 

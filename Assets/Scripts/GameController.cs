@@ -9,7 +9,7 @@ public class GameController : MonoBehaviour
 
   public void Start()
   {
-    // Initialize Script Manager
+    new GameResources();
     ScriptManager.Initialize();
     ItemManager.Initialize();
     new PlayerController();
@@ -26,7 +26,8 @@ public class GameController : MonoBehaviour
     for (int i = 0; i < 4; i++)
       playerEntity._Storage.Add(null);
 
-    new ScriptEntity(4, new Vector3(0, 0, 0), -1);
+    new ScriptEntity(1, new Vector3(0, 0, 0), -1);
+    new ScriptEntity(2, new Vector3(0, 0, -2), -1);
 
 
     // Initizalize other systems
@@ -54,6 +55,9 @@ public class GameController : MonoBehaviour
       ScriptManager.TickScripts();
       ScriptEntity.TickScriptEntities();
     }
+
+    // Update entities
+    ScriptEntity.UpdateScriptEntities();
 
     // Update player
     PlayerController.s_Singleton.Update();

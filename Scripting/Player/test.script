@@ -2,15 +2,10 @@
 down()
 
 var fence = get()
+fence:jump()
 
-var j = fence:jump()
-log(j)
-
-sleep(1)
+var rock = get()
+rock:mine()
 
 up()
-
 fence:jump()
-log(j)
-
-log(item)

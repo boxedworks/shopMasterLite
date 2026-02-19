@@ -82,7 +82,8 @@ namespace SimpleScript
       {
         parentScript._ExternalReturnData = returnData;
         parentScript.Enable();
-        parentScript.Tick(returnData.StartsWith("!E"));
+        var forceTick = returnData?.StartsWith("!E") ?? false;
+        parentScript.Tick(forceTick);
       }
     }
     //
@@ -1004,11 +1005,10 @@ namespace SimpleScript
                       break;
                     }
 
-                    //// TODO pass parameters to entity/item functions
-
                     // Fire function
                     Debug.Log($"Firing entity function: {currentTarget._Type}:{functionName}");
 
+                    // Attach to entity interacting with
                     var entityScript = currentTarget._ScriptEntity.LoadAndAttachScript(new ScriptLoadData()
                     {
                       PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
@@ -1017,16 +1017,22 @@ namespace SimpleScript
                     entityScript._parentScript = this;
                     entityScript._variables.Add("_entity", $"_:get({_attachedEntity._EntityData.Id})");
 
-                    // Check for variable
+                    // Add script parameters
+                    for (var u = 0; u < functionParameters.Count; u++)
+                    {
+                      var newParameter = functionParameters[u];
+                      entityScript._variables.Add($"_param{u}", newParameter);
+                    }
+
+                    // Check for return statement
                     if (parameterCheck)
                     {
                       _externalReturnStatement = statement;
                       _externalLine = line;
-                    }
 
-                    // If looking for return statement, keep line index the same to re-fire function until it returns data
-                    if (parameterCheck)
+                      // Keep line index the same to re-fire function until it returns data
                       _lineIndex--;
+                    }
 
                     // Wait for script to complete
                     breakLoop = true;
@@ -1045,6 +1051,7 @@ namespace SimpleScript
                     // Fire function
                     Debug.Log($"Firing item function: {currentTarget._Type}:{functionName}");
 
+                    // Attach to entity wielding item
                     var itemScript = _attachedEntity.LoadAndAttachScript(new ScriptLoadData()
                     {
                       PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
@@ -1052,16 +1059,22 @@ namespace SimpleScript
                     });
                     itemScript._parentScript = this;
 
-                    // Check for variable
+                    // Add script parameters
+                    for (var u = 0; u < functionParameters.Count; u++)
+                    {
+                      var newParameter = functionParameters[u];
+                      itemScript._variables.Add($"_param{u}", newParameter);
+                    }
+
+                    // Check for return statement
                     if (parameterCheck)
                     {
                       _externalReturnStatement = statement;
                       _externalLine = line;
-                    }
 
-                    // If looking for return statement, keep line index the same to re-fire function until it returns data
-                    if (parameterCheck)
+                      // Keep line index the same to re-fire function until it returns data
                       _lineIndex--;
+                    }
 
                     // Wait for script to complete
                     breakLoop = true;
@@ -1595,6 +1608,42 @@ namespace SimpleScript
         }
       );
 
+      // Shake entity
+      RegisterSystemFunction(
+        "shake",
+        (ScriptBase script, string accessor, string[] parameters) =>
+        {
+          // Validate accessor
+          if (accessor != "_")
+          {
+            return SystemFunctionReturnData.InvalidFunction();
+          }
+
+          // Validate parameters
+          if (parameters.Length != 3)
+          {
+            return SystemFunctionReturnData.InvalidParameters(2);
+          }
+
+          // Get entity by id
+          var entityData = parameters[0];
+          var entity = GetEntityByIdOrStatement(entityData);
+          if (entity == null)
+          {
+            return SystemFunctionReturnData.NullReference();
+          }
+
+          // Get shake params
+          var shakeTime = int.Parse(parameters[1]);
+          var shakeIntensity = int.Parse(parameters[2]);
+
+          // Shake
+          entity.Shake(shakeTime, shakeIntensity);
+
+          //
+          return SystemFunctionReturnData.Success(0);
+        }
+      );
     }
 
     // Function for validating entity variable

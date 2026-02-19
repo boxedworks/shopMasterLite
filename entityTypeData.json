@@ -9,29 +9,15 @@
         },
         {
             "Id": 1,
-            "Name": "Tree",
-            "Description": "A tree.",
+            "Name": "Broken fence",
+            "Description": "A broken fence. You can probably jump it.",
             "Solid": true,
             "Size": 1
         },
         {
             "Id": 2,
-            "Name": "Slime",
-            "Description": "A simple slime.",
-            "Solid": true,
-            "Size": 1
-        },
-        {
-            "Id": 3,
-            "Name": "Fence",
-            "Description": "A fence.",
-            "Solid": true,
-            "Size": 1
-        },
-        {
-            "Id": 4,
-            "Name": "Broken fence",
-            "Description": "A broken fence. You can probably jump it.",
+            "Name": "Rock",
+            "Description": "It's a rock. You can mine this.",
             "Solid": true,
             "Size": 1
         }
