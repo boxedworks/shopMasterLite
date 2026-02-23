@@ -1,6 +1,6 @@
 
 sleep(1)
-_:shake(this, 1, 1)
+_:shake(this, 1)
 _:giveItem(_entity, 1)
 
 exit()

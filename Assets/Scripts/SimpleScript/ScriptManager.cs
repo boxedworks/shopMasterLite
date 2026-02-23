@@ -21,6 +21,9 @@ namespace SimpleScript
 
     Dictionary<int, ScriptBase> _scripts;
 
+    string[] _conditionalOperators = new string[] { "==", "!=", "<", ">", ">=", "<=" };
+    static string[] s_conditionalOperators { get { return s_Singleton._conditionalOperators; } }
+
     public static void Initialize()
     {
       s_Singleton = new ScriptManager();
@@ -158,7 +161,8 @@ namespace SimpleScript
     {
       public int _Id, _OwnerId;
       string _codeRaw;
-      bool _isEnabled;
+      bool _isEnabled, _breakLoop;
+      int _tickCooldown;
       public void Enable()
       {
         if (_isEnabled)
@@ -187,6 +191,7 @@ namespace SimpleScript
 
       // Lines in the script
       string[] _lines;
+      string _line, _lineOriginal;
 
       // Current line index
       int _lineIndex,
@@ -263,9 +268,9 @@ namespace SimpleScript
 
         //Debug.Log($"Ticking script [{_Id}] for entity [{_attachedEntity._EntityData.Id}]");
 
-        var breakLoop = false;
+        _breakLoop = false;
         var tokensAlloted = 10;
-        var tickCooldown = 1;
+        _tickCooldown = 1;
         for (; ; )
         {
 
@@ -278,8 +283,8 @@ namespace SimpleScript
           }
 
           // Gather line
-          var line = _lines[_lineIndex++].Trim();
-          var lineOriginal = line;
+          _line = _lines[_lineIndex++].Trim();
+          _lineOriginal = _line;
 
           // Check external return statement
           if (_externalReturnData != null)
@@ -298,39 +303,25 @@ namespace SimpleScript
             if (_externalReturnStatement != null)
             {
               int statementPos = _externalLine.IndexOf(_externalReturnStatement);
-              line = _externalLine.Remove(statementPos, _externalReturnStatement.Length).Insert(statementPos, _externalReturnData);
+              _line = _externalLine.Remove(statementPos, _externalReturnStatement.Length).Insert(statementPos, _externalReturnData);
             }
 
             // Clear external return data
             _externalReturnData = _externalReturnStatement = _externalLine = null;
           }
 
-          // Log error
-          void logError(string error)
-          {
-
-            // Log
-            var errorString = $"Line [{_lineIndex}]: [{lineOriginal}] [{error}]";
-            Debug.LogError(errorString);
-            _attachedEntity.AppendLog($"<color=red>{errorString}</color>");
-
-            // Exit loop and remove script
-            breakLoop = true;
-            ScriptManager.RemoveScript(this, $"!E {error}");
-          }
-
           // Check blank line
-          if (line.Length == 0) continue;
-          Debug.Log("Read line: " + line);
+          if (_line.Length == 0) continue;
+          Debug.Log("Read line: " + _line);
 
           // Check comment
-          if (line.StartsWith(@"//") || line.StartsWith("#") || line.StartsWith("$"))
+          if (_line.StartsWith(@"//") || _line.StartsWith("#") || _line.StartsWith("$"))
           {
             continue;
           }
 
           // Check depth
-          if (line == "end")
+          if (_line == "end")
           {
 
             if (_logicDepth == 0 && _lineDepth == 0)
@@ -347,7 +338,7 @@ namespace SimpleScript
             continue;
           }
 
-          else if (line == "else")
+          else if (_line == "else")
           {
 
             if (_lineDepth == 0)
@@ -377,9 +368,9 @@ namespace SimpleScript
           }
 
           // New variable assignment
-          if (line.StartsWith("var ") && line.Contains("="))
+          if (_line.StartsWith("var ") && _line.Contains("="))
           {
-            var lineSplit = line.Split("=");
+            var lineSplit = _line.Split("=");
             if (lineSplit.Length > 1)
             {
               var variable = lineSplit[0][4..].Trim();
@@ -390,7 +381,7 @@ namespace SimpleScript
               }
 
               var value = HandleStatement(lineSplit[1].Trim(), true);
-              if (breakLoop) break;
+              if (_breakLoop) break;
               _variables.Add(variable, value);
               continue;
             }
@@ -402,9 +393,9 @@ namespace SimpleScript
           }
 
           // Existing variable assignment
-          if (!line.Contains("==") && line.Contains("="))
+          if (!_line.Contains("==") && _line.Contains("="))
           {
-            var lineSplit = line.Split("=");
+            var lineSplit = _line.Split("=");
             if (lineSplit.Length > 1)
             {
               var variable = lineSplit[0].Trim();
@@ -416,7 +407,7 @@ namespace SimpleScript
               }
 
               var value = HandleStatement(lineSplit[1].Trim(), true);
-              if (breakLoop) break;
+              if (_breakLoop) break;
               _variables[variable] = value;
               continue;
             }
@@ -427,747 +418,816 @@ namespace SimpleScript
             }
           }
 
-          string CheckSubstitueVariable(string accessor)
-          {
-            foreach (var pair in _variables)
-            {
-              if (accessor == pair.Key)
-              {
-                var gotVariable = CheckSubstitueVariable(pair.Value);
-                Debug.Log($"Substituted variable: {accessor} => {gotVariable}");
-                return gotVariable;
-              }
-            }
-            return accessor;
-          }
-
-          // Evaluate parameters
-          string EvaluateParameter(string parameter)
-          {
-            //Debug.Log($"Evaluating parameter: {parameter}");
-            parameter = CheckSubstitueVariable(parameter);
-            if ((parameter.Contains("(") && parameter.Contains(")")) || parameter.Contains("."))
-            {
-              var parameterSave = parameter;
-              parameter = HandleStatement(parameter, true);
-              Debug.Log($"Evaluated param: {parameterSave} => {parameter}");
-            }
-            return parameter;
-          }
-
           // Check for logic
-          if (line.StartsWith("if"))
+          if (_line.StartsWith("if"))
           {
 
-            var lineLogic = line[2..].Trim();
-
-            // Handle one logical expression
-            bool GetLogic(string val0, string val1, string operator_)
-            {
-
-              if (!new string[] { "==", "!=", "<", ">", ">=", "<=" }.Contains(operator_))
-              {
-                logError($"Invalid conditional operator");
-                return false;
-              }
-              Debug.Log($"Checking logic: {val0} {operator_} {val1}");
-
-              val0 = EvaluateParameter(val0);
-              val1 = EvaluateParameter(val1);
-
-              // Evaluate condition
-              var returnValue = false;
-              switch (operator_)
-              {
-                case "==":
-                  returnValue = val0 == val1;
-                  break;
-                case "!=":
-                  returnValue = val0 != val1;
-                  break;
-
-                case "<":
-                  returnValue = int.Parse(val0) < int.Parse(val1);
-                  break;
-                case "<=":
-                  returnValue = int.Parse(val0) <= int.Parse(val1);
-                  break;
-                case ">":
-                  returnValue = int.Parse(val0) > int.Parse(val1);
-                  break;
-                case ">=":
-                  returnValue = int.Parse(val0) >= int.Parse(val1);
-                  break;
-              }
-
-              //Debug.Log($"Comparing {val0} {operator_} {val1} : {returnValue}");
-              return returnValue;
-            }
-
-            /// Link type
-            // 0 = AND
-            // 1 = OR
-            // Loop through words, checking parenthesis
-            var logicSplit = lineLogic.Split(" ");
-            var logicDepth = 0;
-            var lastLogicDepth = -1;
-            var logicType = -1;
-            var masterLogic = false;
-            var logicInit = false;
-            Dictionary<int, (bool, int)> logicStore = new();
-            for (var i = 0; i < logicSplit.Length; i++)
-            {
-
-              var logicVal0 = logicSplit[i];
-
-              // Check logic operands
-              if (logicVal0 == "and")
-              {
-                logicType = 0;
-                continue;
-              }
-              if (logicVal0 == "or")
-              {
-                logicType = 1;
-                continue;
-              }
-
-              // Check single-word conditions; variables + true/false
-              // Check ! sign before parenthsis to flip value
-
-              // Open parenthesis
-              while (logicVal0.StartsWith("("))
-              {
-                logicDepth++;
-                logicVal0 = logicVal0[1..].Trim();
-              }
-
-              var logicOperator = logicSplit[++i];
-              var logicVal1 = logicSplit[++i];
-
-              // Close parenthesis
-              while (logicVal1.EndsWith(")"))
-              {
-                logicDepth--;
-                logicVal1 = logicVal1[..^1].Trim();
-              }
-
-              // Evaluate
-              var evaluate = GetLogic(logicVal0, logicVal1, logicOperator);
-              if (breakLoop) break;
-
-              // Base master value
-              if (!logicInit)
-              {
-                logicInit = true;
-                masterLogic = evaluate;
-              }
-
-              // Add logic
-              else
-              {
-
-                // If parenthesis depth has changed
-                if (logicDepth != lastLogicDepth)
-                {
-
-                  // If going deeper into parenthesis, save old logic value
-                  if (logicDepth > lastLogicDepth)
-                  {
-                    logicStore.Add(lastLogicDepth, (masterLogic, logicType));
-                    masterLogic = evaluate;
-                  }
-
-                  // Else if leaving parenthesis, get final evaluation of parenthesis
-                  else
-                  {
-                    switch (logicType)
-                    {
-                      case 0:
-                        masterLogic = masterLogic && evaluate;
-                        break;
-                      case 1:
-                        masterLogic = masterLogic || evaluate;
-                        break;
-                    }
-
-                    // If resuming logic, resume and combine from parenthesis
-                    if (logicStore.ContainsKey(logicDepth))
-                    {
-                      var returnLogic = logicStore[logicDepth];
-                      logicStore.Remove(logicDepth);
-
-                      var oldLogic = returnLogic.Item1;
-                      logicType = returnLogic.Item2;
-
-                      switch (logicType)
-                      {
-                        case 0:
-                          masterLogic = oldLogic && masterLogic;
-                          break;
-                        case 1:
-                          masterLogic = oldLogic || masterLogic;
-                          break;
-                      }
-                    }
-
-                    // Else, just continue into as a new or original depth
-                  }
-                }
-
-                // Normal logic addition
-                else
-                {
-                  switch (logicType)
-                  {
-                    case 0:
-                      masterLogic = masterLogic && evaluate;
-                      break;
-                    case 1:
-                      masterLogic = masterLogic || evaluate;
-                      break;
-                  }
-                }
-
-              }
-              lastLogicDepth = logicDepth;
-
-            }
-
-            if (breakLoop) break;
+            var lineLogic = _line[2..].Trim();
+            var logic = HandleLogic(lineLogic);
+            if (_breakLoop) break;
 
             // If true, go inside of if statement +1 depth
             _lineDepth++;
-            if (masterLogic)
+            if (logic)
               _logicDepth++;
             continue;
           }
 
-          string HandleStatement(string statement, bool parameterCheck)
+          HandleStatement(_line, false);
+
+          //
+          if (_breakLoop) break;
+        }
+
+        // Apply tick cooldown
+        _attachedEntity._TickCooldown = Mathf.Clamp(_attachedEntity._TickCooldown, _tickCooldown, 100);
+      }
+
+      string CheckSubstitueVariable(string accessor)
+      {
+        foreach (var pair in _variables)
+        {
+          if (accessor == pair.Key)
           {
-            // Split statement into traversable list marked as accessor or function; substitute variables
-            //Debug.Log($"Handling statement: {statement} (Param check: {parameterCheck})");
-            List<(string, int)> statementData = new();
-            var returnStatement = "";
+            var gotVariable = CheckSubstitueVariable(pair.Value);
+            Debug.Log($"Substituted variable: {accessor} => {gotVariable}");
+            return gotVariable;
+          }
+        }
+        return accessor;
+      }
 
-            // Traverse letter by letter
-            var currentWord = "";
-            var wordType = -1;
-            var functionCounter = 0;
-            for (var i = 0; i < statement.Length; i++)
+      // Evaluate parameters
+      string EvaluateParameter(string parameter)
+      {
+        //Debug.Log($"Evaluating parameter: {parameter}");
+        parameter = CheckSubstitueVariable(parameter);
+        if ((parameter.Contains("(") && parameter.Contains(")")) || parameter.Contains("."))
+        {
+          var parameterSave = parameter;
+          parameter = HandleStatement(parameter, true);
+          Debug.Log($"Evaluated param: {parameterSave} => {parameter}");
+        }
+        return parameter;
+      }
+
+      // Evaluate one logical expression
+      bool GetLogic(string val0, string val1, string operator_)
+      {
+
+        if (!s_conditionalOperators.Contains(operator_))
+        {
+          logError($"Invalid conditional operator");
+          return false;
+        }
+        //Debug.Log($"Checking logic: {val0} {operator_} {val1}");
+
+        val0 = EvaluateParameter(val0);
+        val1 = EvaluateParameter(val1);
+
+        // Evaluate condition
+        var returnValue = false;
+        switch (operator_)
+        {
+          case "==":
+            returnValue = val0 == val1;
+            break;
+          case "!=":
+            returnValue = val0 != val1;
+            break;
+
+          case "<":
+            returnValue = int.Parse(val0) < int.Parse(val1);
+            break;
+          case "<=":
+            returnValue = int.Parse(val0) <= int.Parse(val1);
+            break;
+          case ">":
+            returnValue = int.Parse(val0) > int.Parse(val1);
+            break;
+          case ">=":
+            returnValue = int.Parse(val0) >= int.Parse(val1);
+            break;
+        }
+
+        //Debug.Log($"Comparing {val0} {operator_} {val1} : {returnValue}");
+        return returnValue;
+      }
+
+      //
+      bool HandleLogic(string lineLogic)
+      {
+
+        //Debug.Log($"Handling logic: {lineLogic}");
+
+        /// Link type
+        // 0 = AND
+        // 1 = OR
+        // Loop through words, checking parenthesis
+        var logicSplit = lineLogic.Split(" ");
+        var logicDepth = 0;
+        var lastLogicDepth = -1;
+        var logicType = -1;
+        var masterLogic = false;
+        var logicInit = false;
+        Dictionary<int, (bool, int)> logicStore = new();
+        for (var i = 0; i < logicSplit.Length; i++)
+        {
+
+          var logicVal0 = logicSplit[i];
+
+          // Check logic operands
+          if (logicVal0 == "and")
+          {
+            logicType = 0;
+            continue;
+          }
+          if (logicVal0 == "or")
+          {
+            logicType = 1;
+            continue;
+          }
+
+          // Check single-word conditions; variables + true/false
+          // Check ! sign before parenthsis to flip value
+
+          // Open parenthesis
+          while (logicVal0.StartsWith("("))
+          {
+            logicDepth++;
+            logicVal0 = logicVal0[1..].Trim();
+          }
+
+          var logicOperator = logicSplit[++i];
+          var logicVal1 = logicSplit[++i];
+
+          // Close parenthesis
+          while (logicVal1.EndsWith(")"))
+          {
+            logicDepth--;
+            logicVal1 = logicVal1[..^1].Trim();
+          }
+
+          // Evaluate
+          var evaluate = GetLogic(logicVal0, logicVal1, logicOperator);
+          if (_breakLoop) break;
+
+          // Base master value
+          if (!logicInit)
+          {
+            logicInit = true;
+            masterLogic = evaluate;
+          }
+
+          // Add logic
+          else
+          {
+
+            // If parenthesis depth has changed
+            if (logicDepth != lastLogicDepth)
             {
-              var letter = statement[i];
 
-              // Check function
-              if (letter == '(')
-                functionCounter++;
-              else if (letter == ')')
-                functionCounter--;
-
-              // Check type
-              if (letter == '.' || letter == ':' || i == statement.Length - 1)
+              // If going deeper into parenthesis, save old logic value
+              if (logicDepth > lastLogicDepth)
               {
+                logicStore.Add(lastLogicDepth, (masterLogic, logicType));
+                masterLogic = evaluate;
+              }
 
-                var wordTypeSave = wordType;
-
-                // Check last word
-                if (i == statement.Length - 1)
-                  currentWord += letter;
-
-                // Check next word type
-                var resetWord = true;
-                if (letter == '.')
+              // Else if leaving parenthesis, get final evaluation of parenthesis
+              else
+              {
+                switch (logicType)
                 {
-
-                  // Check function parameters
-                  if (functionCounter > 0)
-                    resetWord = false;
-                  else
-                    wordType = 0;
-                }
-                else if (letter == ':')
-                {
-                  wordType = 1;
+                  case 0:
+                    masterLogic = masterLogic && evaluate;
+                    break;
+                  case 1:
+                    masterLogic = masterLogic || evaluate;
+                    break;
                 }
 
-                if (resetWord)
+                // If resuming logic, resume and combine from parenthesis
+                if (logicStore.ContainsKey(logicDepth))
                 {
-                  // Store data type
-                  if (statementData.Count == 0)
-                    wordTypeSave = currentWord.Contains('(') ? 1 : 0;
+                  var returnLogic = logicStore[logicDepth];
+                  logicStore.Remove(logicDepth);
 
-                  if (wordTypeSave == 0)
+                  var oldLogic = returnLogic.Item1;
+                  logicType = returnLogic.Item2;
+
+                  switch (logicType)
                   {
-                    currentWord = CheckSubstitueVariable(currentWord);
-                    if (currentWord.Contains('.') || currentWord.Contains(':'))
-                    {
-                      statement = statement.Insert(i, currentWord);
-                      i--;
-                      currentWord = "";
-                      continue;
-                    }
+                    case 0:
+                      masterLogic = oldLogic && masterLogic;
+                      break;
+                    case 1:
+                      masterLogic = oldLogic || masterLogic;
+                      break;
                   }
+                }
 
-                  statementData.Add((currentWord, wordTypeSave));
+                // Else, just continue into as a new or original depth
+              }
+            }
 
-                  // Reset for next word
+            // Normal logic addition
+            else
+            {
+              switch (logicType)
+              {
+                case 0:
+                  masterLogic = masterLogic && evaluate;
+                  break;
+                case 1:
+                  masterLogic = masterLogic || evaluate;
+                  break;
+              }
+            }
+
+          }
+          lastLogicDepth = logicDepth;
+
+        }
+
+        return masterLogic;
+      }
+
+      string HandleStatement(string statement, bool parameterCheck)
+      {
+        // Split statement into traversable list marked as accessor or function; substitute variables
+        //Debug.Log($"Handling statement: {statement} (Param check: {parameterCheck})");
+        List<(string, int)> statementData = new();
+        var returnStatement = "";
+
+        // Traverse letter by letter
+        var currentWord = "";
+        var wordType = -1;
+        var functionCounter = 0;
+        Debug.Log($"Handling statement: {statement}");
+        for (var i = 0; i < statement.Length; i++)
+        {
+          var letter = statement[i];
+
+          // Check function
+          if (letter == '(')
+            functionCounter++;
+          else if (letter == ')')
+            functionCounter--;
+
+          // Check type
+          if (letter == '.' || letter == ':' || i == statement.Length - 1)
+          {
+
+            var wordTypeSave = wordType;
+
+            // Check last word
+            if (i == statement.Length - 1)
+            {
+              currentWord += letter;
+              i++;
+            }
+
+            // Check next word type
+            var resetWord = true;
+            if (letter == '.')
+            {
+
+              // Check function parameters
+              if (functionCounter > 0)
+                resetWord = false;
+              else
+                wordType = 0;
+            }
+            else if (letter == ':')
+            {
+              wordType = 1;
+            }
+
+            if (resetWord)
+            {
+              // Store data type
+              if (statementData.Count == 0)
+                wordTypeSave = currentWord.Contains('(') ? 1 : 0;
+
+              if (wordTypeSave == 0)
+              {
+                var currentWordLength = currentWord.Length;
+                currentWord = CheckSubstitueVariable(currentWord);
+                if (currentWord.Contains('.') || currentWord.Contains(':'))
+                {
+                  statement = currentWord + statement.Remove(i - currentWordLength, currentWordLength);
+                  i -= currentWordLength + 1;
                   currentWord = "";
                   continue;
                 }
               }
 
-              currentWord += letter;
+              statementData.Add((currentWord, wordTypeSave));
+
+              // Reset for next word
+              currentWord = "";
+              continue;
             }
+          }
 
-            // Traverse through statement objects until end
-            ScriptTarget currentTarget = null;
-            var currentTargetDepth = -1;
-            var accessorLast = "";
-            for (var i = 0; i < statementData.Count; i++)
-            {
+          currentWord += letter;
+        }
 
-              var statementSection = statementData[i];
-              var word = statementSection.Item1;
-              switch (statementSection.Item2)
+        // Traverse through statement objects until end
+        ScriptTarget currentTarget = null;
+        var currentTargetDepth = -1;
+        var accessorLast = "";
+        for (var i = 0; i < statementData.Count; i++)
+        {
+
+          var statementSection = statementData[i];
+          var word = statementSection.Item1;
+          switch (statementSection.Item2)
+          {
+
+            // Variable
+            case 0:
+
+              Debug.Log($"Checking variable {word}");
+
+              var accessorLastSave = accessorLast;
+              accessorLast = word;
+
+              // If first accessor, check valid
+              if (i == 0)
               {
 
-                // Variable
-                case 0:
+                // Check server authenticated
+                if (word == "_" && _OwnerId != -1)
+                {
+                  logError($"Invalid authentication");
+                  break;
+                }
 
-                  var accessorLastSave = accessorLast;
-                  accessorLast = word;
+                // Check numbers
+                if (int.TryParse(word, out _))
+                {
+                  if (parameterCheck)
+                    returnStatement = word;
+                  continue;
+                }
 
-                  // If first accessor, check valid
-                  if (i == 0)
-                  {
+                // Check string
+                if (word.StartsWith('"') && word.EndsWith('"'))
+                {
+                  if (parameterCheck)
+                    returnStatement = word;
+                  continue;
+                }
 
-                    // Check server authenticated
-                    if (word == "_" && _OwnerId != -1)
-                    {
-                      logError($"Invalid authentication");
-                      break;
-                    }
+                // Check entity variable
+                if (IsValidVariableEntity(word))
+                {
+                  currentTarget = new ScriptTarget(GetEntityByStatement(word));
+                  currentTargetDepth = i;
 
-                    // Check number
-                    if (int.TryParse(word, out _))
-                    {
-                      if (parameterCheck)
-                        returnStatement = word;
-                      continue;
-                    }
+                  if (parameterCheck)
+                    returnStatement = word;
+                  continue;
+                }
 
-                    // Check entity variable
-                    if (IsValidVariableEntity(word))
-                    {
-                      currentTarget = new ScriptTarget(GetEntityByStatement(word));
-                      currentTargetDepth = i;
+                // Check item variable
+                if (IsValidVariableItem(word))
+                {
+                  currentTarget = new ScriptTarget(GetItemByStatement(word));
+                  currentTargetDepth = i;
 
-                      if (parameterCheck)
-                        returnStatement = word;
-                      continue;
-                    }
+                  if (parameterCheck)
+                    returnStatement = word;
+                  continue;
+                }
 
-                    // Check item variable
-                    if (IsValidVariableItem(word))
-                    {
-                      currentTarget = new ScriptTarget(GetItemByStatement(word));
-                      currentTargetDepth = i;
+                // Check item storage
+                if (_attachedEntity._HasStorage && word == "items")
+                {
+                  continue;
+                }
 
-                      if (parameterCheck)
-                        returnStatement = word;
-                      continue;
-                    }
+                // Check all valid first accessors
+                if (new string[] { "_", }.Contains(word))
+                {
+                  continue;
+                }
 
-                    // Check item storage
-                    if (_attachedEntity._HasStorage && word == "items")
-                    {
-                      continue;
-                    }
+                logError($"Null object reference ({word})");
+                break;
+              }
 
-                    // Check all valid first accessors
-                    if (new string[] { "_", }.Contains(word))
-                    {
-                      continue;
-                    }
+              // Check float
+              if (i == 1)
+              {
+                var floatString = $"{accessorLastSave}.{word}";
+                if (float.TryParse(floatString, out _))
+                {
+                  if (parameterCheck)
+                    returnStatement = floatString;
+                  continue;
+                }
+              }
 
-                    logError($"Null object reference ({word})");
-                    break;
-                  }
+              // Check valid accessor based on last accessor
+              List<string> validAccessors = null;
+              if (IsValidVariableEntity(returnStatement))
+              {
+                var entityGot = GetEntityByStatement(returnStatement);
+                if (entityGot.HasEntityVariable_Int(word))
+                {
+                  returnStatement = $"{entityGot.GetEntityVariable_Int(word)}";
 
-                  // Check valid accessor based on last accessor
-                  List<string> validAccessors = null;
-                  if (IsValidVariableEntity(returnStatement))
-                  {
-                    var entityGot = GetEntityByStatement(returnStatement);
-                    if (entityGot.HasEntityVariable_Int(word))
-                    {
-                      returnStatement = $"{entityGot.GetEntityVariable_Int(word)}";
-
-                      validAccessors = new()
+                  validAccessors = new()
                       {
                         word
                       };
-                    }
-                  }
-
-                  // Validate
-                  if (!(validAccessors?.Contains(word) ?? false))
-                  {
-                    logError($"Null object reference ({accessorLastSave} => {word})");
-                    break;
-                  }
-
-                  break;
-
-                // Function
-                case 1:
-
-                  accessorLastSave = accessorLast;
-                  accessorLast = "";
-
-                  // Get function and parameters
-                  var functionParameters = new List<string>();
-                  var functionName = "";
-                  if (word.Contains("(") && word.EndsWith(")"))
-                  {
-                    var functionData = new List<string>(word.Split("("));
-
-                    functionName = functionData[0];
-                    functionData.RemoveAt(0);
-                    var parameters = string.Join("(", functionData)[..^1];
-
-                    // Simple single parameter
-                    if (!parameters.Contains(","))
-                    {
-                      var param = parameters.Trim();
-                      if (param.Length > 0)
-                        functionParameters.Add(param);
-                    }
-
-                    // List of parameters or complex parameter(s)
-                    else
-                    {
-                      var parameterDepth = 0;
-                      var parameterGot = "";
-                      for (var u = 0; u < parameters.Length; u++)
-                      {
-                        var nextChar = parameters[u];
-
-                        // Check depth
-                        if (nextChar == '(' || nextChar == '[')
-                          parameterDepth++;
-                        if (nextChar == ')' || nextChar == ']')
-                          parameterDepth--;
-
-                        //
-                        if (nextChar == ',')
-                          if (parameterDepth == 0)
-                          {
-                            parameterGot = parameterGot.Trim();
-                            if (parameterGot.Length > 0)
-                              functionParameters.Add(parameterGot);
-                            parameterGot = "";
-                            continue;
-                          }
-
-                        //
-                        parameterGot += nextChar;
-                      }
-                      parameterGot = parameterGot.Trim();
-                      if (parameterGot.Length > 0)
-                        functionParameters.Add(parameterGot);
-                    }
-
-                    //
-                    for (var u = 0; u < functionParameters.Count; u++)
-                    {
-                      // Arithmetic
-                      var evaluated = false;
-                      foreach (var arithmeticOp in new char[] { '+', '-', '*', '/' })
-                        if (functionParameters[u].Contains(arithmeticOp))
-                        {
-                          evaluated = true;
-
-                          var statementSplit = functionParameters[u].Split(arithmeticOp);
-
-                          for (var y = 0; y < statementSplit.Length; y++)
-                            statementSplit[y] = EvaluateParameter(statementSplit[y].Trim());
-                          functionParameters[u] = ((int)string.Join(arithmeticOp, statementSplit).Eval()) + "";
-                        }
-
-                      // No arthimetic
-                      if (!evaluated)
-                        functionParameters[u] = EvaluateParameter(functionParameters[u]);
-                    }
-                  }
-
-                  if (breakLoop) break;
-
-                  // Validate function exists
-                  var isValidFunction = false;
-                  var isEntityFunction = false;
-                  var isSystemFunction = false;
-                  var isItemFunction = false;
-
-                  // Check entity function
-                  if (currentTarget != null)
-                  {
-                    switch (currentTarget._TargetType)
-                    {
-                      case ScriptTarget.TargetType.SCRIPT_ENTITY:
-                        isEntityFunction = isValidFunction = ScriptEntity.ScriptEntityHelper.HasFunction(currentTarget._ScriptEntity, functionName);
-                        break;
-                      case ScriptTarget.TargetType.ITEM:
-                        isItemFunction = isValidFunction = ItemManager.HasFunction(currentTarget._Item, functionName);
-                        break;
-                    }
-                  }
-
-                  // Check system function
-                  if (!isValidFunction)
-                    foreach (var systemFunction in s_Singleton._systemFunctions)
-                    {
-                      if (systemFunction.Key == functionName)
-                      {
-                        isSystemFunction = isValidFunction = true;
-                        break;
-                      }
-                    }
-
-                  if (!isValidFunction)
-                  {
-                    if (currentTarget != null)
-                      logError($"Referencing non-existant function {currentTarget._Type}:{functionName})");
-                    else
-                      logError($"Null-reference exception NULL:{functionName})");
-                    break;
-                  }
-
-                  // Validate function # parameters (entity/item only)
-                  if (isEntityFunction || isItemFunction)
-                  {
-                    var numValidParameters = isEntityFunction ?
-                      ScriptEntity.ScriptEntityHelper.s_FunctionRepository.GetFunctionParameterCount(functionName) :
-                      ItemManager.s_FunctionRepository.GetFunctionParameterCount(functionName);
-
-                    if (numValidParameters == -1)
-                    {
-                      logError($"Referencing non-defined function {functionName})");
-                      break;
-                    }
-                    if (functionParameters.Count != numValidParameters)
-                    {
-                      logError($"Invalid number of parameters got for function [{functionName}] {functionParameters.Count}, {numValidParameters} expected");
-                      break;
-                    }
-                  }
-
-                  // Entity function
-                  var serverAuthenticated = _OwnerId == -1;
-                  if (isEntityFunction)
-                  {
-
-                    // Check distance
-                    var maxDistance = 1;
-                    var distance = Math.Abs(
-                      currentTarget._TilePosition.x - _attachedEntity._TilePosition.x +
-                      currentTarget._TilePosition.y - _attachedEntity._TilePosition.y +
-                      currentTarget._TilePosition.z - _attachedEntity._TilePosition.z
-                    );
-                    if (distance > maxDistance)
-                    {
-                      logError($"Target out of range ({distance} > {maxDistance})");
-                      break;
-                    }
-
-                    // Check facing entity
-                    var direction = _attachedEntity._Direction;
-                    var targetPosition = currentTarget._TilePosition;
-                    var validFacing = false;
-                    switch (direction)
-                    {
-                      case 0:
-                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z + 1));
-                        break;
-                      case 1:
-                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z - 1));
-                        break;
-                      case 2:
-                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x + 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
-                        break;
-                      case 3:
-                        validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x - 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
-                        break;
-                    }
-                    if (!validFacing)
-                    {
-                      logError($"Not facing target");
-                      break;
-                    }
-
-                    // Fire function
-                    Debug.Log($"Firing entity function: {currentTarget._Type}:{functionName}");
-
-                    // Attach to entity interacting with
-                    var entityScript = currentTarget._ScriptEntity.LoadAndAttachScript(new ScriptLoadData()
-                    {
-                      PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
-                      ScriptType = ScriptType.ENTITY
-                    });
-                    entityScript._parentScript = this;
-                    entityScript._variables.Add("_entity", $"_:get({_attachedEntity._EntityData.Id})");
-
-                    // Add script parameters
-                    for (var u = 0; u < functionParameters.Count; u++)
-                    {
-                      var newParameter = functionParameters[u];
-                      entityScript._variables.Add($"_param{u}", newParameter);
-                    }
-
-                    // Check for return statement
-                    if (parameterCheck)
-                    {
-                      _externalReturnStatement = statement;
-                      _externalLine = line;
-
-                      // Keep line index the same to re-fire function until it returns data
-                      _lineIndex--;
-                    }
-
-                    // Wait for script to complete
-                    breakLoop = true;
-                    _isEnabled = false;
-
-                    // Tick script now!
-                    entityScript.Tick();
-
-                    break;
-                  }
-
-                  // Item function
-                  else if (isItemFunction)
-                  {
-
-                    // Fire function
-                    Debug.Log($"Firing item function: {currentTarget._Type}:{functionName}");
-
-                    // Attach to entity wielding item
-                    var itemScript = _attachedEntity.LoadAndAttachScript(new ScriptLoadData()
-                    {
-                      PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
-                      ScriptType = ScriptType.ITEM
-                    });
-                    itemScript._parentScript = this;
-
-                    // Add script parameters
-                    for (var u = 0; u < functionParameters.Count; u++)
-                    {
-                      var newParameter = functionParameters[u];
-                      itemScript._variables.Add($"_param{u}", newParameter);
-                    }
-
-                    // Check for return statement
-                    if (parameterCheck)
-                    {
-                      _externalReturnStatement = statement;
-                      _externalLine = line;
-
-                      // Keep line index the same to re-fire function until it returns data
-                      _lineIndex--;
-                    }
-
-                    // Wait for script to complete
-                    breakLoop = true;
-                    _isEnabled = false;
-
-                    // Tick script now!
-                    itemScript.Tick();
-
-                    break;
-                  }
-
-                  // System functions
-                  else if (isSystemFunction)
-                  {
-                    Debug.Log($"Firing system function: {accessorLastSave}:{functionName}");
-                    var systemFunction = s_Singleton._systemFunctions[functionName];
-                    var systemReturnData = systemFunction.Execute(this, accessorLastSave, functionParameters.ToArray());
-                    var returnData = systemReturnData.Data;
-
-                    var systemTickCooldown = systemReturnData.TickCooldown;
-                    tickCooldown = systemTickCooldown > -1 ? systemTickCooldown : 0;
-
-                    // Check script removed
-                    if (!s_Singleton._scripts.ContainsKey(_Id))
-                    {
-                      breakLoop = true;
-                      break;
-                    }
-
-                    if (returnData != null)
-                    {
-
-                      // Handle system function errors
-                      if (returnData.StartsWith("!E"))
-                      {
-                        var errorData = returnData.Split("!E")[1].Split(" ");
-                        var errorCode = errorData[0];
-                        switch (errorCode)
-                        {
-                          case "1000":
-                            logError($"Function {accessorLastSave}.{functionName} not defined");
-                            break;
-                          case "1001":
-                            var numValidParameters = int.Parse(errorData[1]);
-                            logError($"Invalid number of parameters [{functionParameters.Count}] got for function [{functionName}], {numValidParameters} expected");
-                            break;
-                          case "1002":
-                            logError($"Null reference in [{functionName}]");
-                            break;
-
-
-                          case "9000":
-                            var customError = string.Join(" ", errorData[1..]);
-                            logError($"{customError}");
-                            break;
-                          case "9999":
-                            logError($"Not implemented: [{functionName}]");
-                            break;
-
-                          default:
-                            logError($"Unknown error: {errorCode}");
-                            break;
-                        }
-                      }
-
-                      if (parameterCheck)
-                        returnStatement = returnData;
-                    }
-
-                    //
-                    if (systemTickCooldown != 0)
-                    {
-                      breakLoop = true;
-                      break;
-                    }
-                  }
-
-                  break;
+                }
               }
 
-              if (breakLoop) break;
-            }
+              // Validate
+              if (!(validAccessors?.Contains(word) ?? false))
+              {
+                logError($"Null object reference ({accessorLastSave} => {word})");
+                break;
+              }
 
-            return returnStatement;
+              break;
+
+            // Function
+            case 1:
+
+              Debug.Log($"Checking function {word}");
+
+              accessorLastSave = accessorLast;
+              accessorLast = "";
+
+              // Get function and parameters
+              var functionParameters = new List<string>();
+              var functionName = "";
+              if (word.Contains("(") && word.EndsWith(")"))
+              {
+                var functionData = new List<string>(word.Split("("));
+
+                functionName = functionData[0];
+                functionData.RemoveAt(0);
+                var parameters = string.Join("(", functionData)[..^1];
+
+                // Simple single parameter
+                if (!parameters.Contains(","))
+                {
+                  var param = parameters.Trim();
+                  if (param.Length > 0)
+                    functionParameters.Add(param);
+                }
+
+                // List of parameters or complex parameter(s)
+                else
+                {
+                  var parameterDepth = 0;
+                  var parameterGot = "";
+                  for (var u = 0; u < parameters.Length; u++)
+                  {
+                    var nextChar = parameters[u];
+
+                    // Check depth
+                    if (nextChar == '(' || nextChar == '[')
+                      parameterDepth++;
+                    if (nextChar == ')' || nextChar == ']')
+                      parameterDepth--;
+
+                    //
+                    if (nextChar == ',')
+                      if (parameterDepth == 0)
+                      {
+                        parameterGot = parameterGot.Trim();
+                        if (parameterGot.Length > 0)
+                          functionParameters.Add(parameterGot);
+                        parameterGot = "";
+                        continue;
+                      }
+
+                    //
+                    parameterGot += nextChar;
+                  }
+                  parameterGot = parameterGot.Trim();
+                  if (parameterGot.Length > 0)
+                    functionParameters.Add(parameterGot);
+                }
+
+                /// TODO fix this....
+                string EvalutateP(string p)
+                {
+                  // Check for logic in parameter; if logic exists, evaluate and return result as boolean string
+                  if (s_conditionalOperators.Any(op => p.Contains(op)))
+                  {
+                    return HandleLogic(p) ? "true" : "false";
+                  }
+
+                  // Else, just evaluate parameter normally
+                  return HandleStatement(p.Trim(), true);
+                }
+
+                //
+                for (var u = 0; u < functionParameters.Count; u++)
+                {
+
+                  // Arithmetic
+                  var evaluated = false;
+                  foreach (var arithmeticOp in new char[] { '+', '-', '*', '/' })
+                    if (functionParameters[u].Contains(arithmeticOp))
+                    {
+                      evaluated = true;
+
+                      var statementSplit = functionParameters[u].Split(arithmeticOp);
+
+                      for (var y = 0; y < statementSplit.Length; y++)
+                        statementSplit[y] = EvalutateP(statementSplit[y]);
+                      functionParameters[u] = ((float)string.Join(arithmeticOp, statementSplit).Eval()) + "";
+                    }
+
+                  // No arthimetic
+                  if (!evaluated)
+                    functionParameters[u] = EvalutateP(functionParameters[u]);
+                }
+              }
+
+              Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. {_breakLoop}");
+
+              if (_breakLoop) break;
+
+              // Validate function exists
+              var isValidFunction = false;
+              var isEntityFunction = false;
+              var isSystemFunction = false;
+              var isItemFunction = false;
+
+              // Check entity function
+              if (currentTarget != null)
+              {
+                switch (currentTarget._TargetType)
+                {
+                  case ScriptTarget.TargetType.SCRIPT_ENTITY:
+                    isEntityFunction = isValidFunction = ScriptEntity.ScriptEntityHelper.HasFunction(currentTarget._ScriptEntity, functionName);
+                    break;
+                  case ScriptTarget.TargetType.ITEM:
+                    isItemFunction = isValidFunction = ItemManager.HasFunction(currentTarget._Item, functionName);
+                    break;
+                }
+              }
+
+              // Check system function
+              if (!isValidFunction)
+                foreach (var systemFunction in s_Singleton._systemFunctions)
+                {
+                  if (systemFunction.Key == functionName)
+                  {
+                    isSystemFunction = isValidFunction = true;
+                    break;
+                  }
+                }
+
+              if (!isValidFunction)
+              {
+                if (currentTarget != null)
+                  logError($"Referencing non-existant function {currentTarget._Type}:{functionName})");
+                else
+                  logError($"Null-reference exception NULL:{functionName})");
+                break;
+              }
+
+              // Validate function # parameters (entity/item only)
+              if (isEntityFunction || isItemFunction)
+              {
+                var numValidParameters = isEntityFunction ?
+                  ScriptEntity.ScriptEntityHelper.s_FunctionRepository.GetFunctionParameterCount(functionName) :
+                  ItemManager.s_FunctionRepository.GetFunctionParameterCount(functionName);
+
+                if (numValidParameters == -1)
+                {
+                  logError($"Referencing non-defined function {functionName})");
+                  break;
+                }
+                if (functionParameters.Count != numValidParameters)
+                {
+                  logError($"Invalid number of parameters got for function [{functionName}] {functionParameters.Count}, {numValidParameters} expected");
+                  break;
+                }
+              }
+
+              // Entity function
+              var serverAuthenticated = _OwnerId == -1;
+              if (isEntityFunction)
+              {
+
+                // Check distance
+                var maxDistance = 1;
+                var distance = Math.Abs(
+                  currentTarget._TilePosition.x - _attachedEntity._TilePosition.x +
+                  currentTarget._TilePosition.y - _attachedEntity._TilePosition.y +
+                  currentTarget._TilePosition.z - _attachedEntity._TilePosition.z
+                );
+                if (distance > maxDistance)
+                {
+                  logError($"Target out of range ({distance} > {maxDistance})");
+                  break;
+                }
+
+                // Check facing entity
+                var direction = _attachedEntity._Direction;
+                var targetPosition = currentTarget._TilePosition;
+                var validFacing = false;
+                switch (direction)
+                {
+                  case 0:
+                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z + 1));
+                    break;
+                  case 1:
+                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z - 1));
+                    break;
+                  case 2:
+                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x + 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
+                    break;
+                  case 3:
+                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x - 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
+                    break;
+                }
+                if (!validFacing)
+                {
+                  logError($"Not facing target");
+                  break;
+                }
+
+                // Fire function
+                Debug.Log($"Firing entity function: {currentTarget._Type}:{functionName}");
+
+                // Attach to entity interacting with
+                var entityScript = currentTarget._ScriptEntity.LoadAndAttachScript(new ScriptLoadData()
+                {
+                  PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
+                  ScriptType = ScriptType.ENTITY
+                });
+                entityScript._parentScript = this;
+                entityScript._variables.Add("_entity", GetEntityStatement(_attachedEntity));
+
+                // Add script parameters
+                for (var u = 0; u < functionParameters.Count; u++)
+                {
+                  var newParameter = functionParameters[u];
+                  entityScript._variables.Add($"_param{u}", newParameter);
+                }
+
+                // Check for return statement
+                if (parameterCheck)
+                {
+                  _externalReturnStatement = statement;
+                  _externalLine = _line;
+
+                  // Keep line index the same to re-fire function until it returns data
+                  _lineIndex--;
+                }
+
+                // Wait for script to complete
+                _breakLoop = true;
+                _isEnabled = false;
+
+                // Tick script now!
+                entityScript.Tick();
+
+                break;
+              }
+
+              // Item function
+              else if (isItemFunction)
+              {
+
+                // Fire function
+                Debug.Log($"Firing item function: {currentTarget._Type}:{functionName}");
+
+                // Attach to entity wielding item
+                var itemScript = _attachedEntity.LoadAndAttachScript(new ScriptLoadData()
+                {
+                  PathTo = $"{currentTarget._Type.ToLower()}.{functionName}",
+                  ScriptType = ScriptType.ITEM
+                });
+                itemScript._parentScript = this;
+
+                // Add script parameters
+                for (var u = 0; u < functionParameters.Count; u++)
+                {
+                  var newParameter = functionParameters[u];
+                  itemScript._variables.Add($"_param{u}", newParameter);
+                }
+
+                // Check for return statement
+                if (parameterCheck)
+                {
+                  _externalReturnStatement = statement;
+                  _externalLine = _line;
+
+                  // Keep line index the same to re-fire function until it returns data
+                  _lineIndex--;
+                }
+
+                // Wait for script to complete
+                _breakLoop = true;
+                _isEnabled = false;
+
+                // Tick script now!
+                itemScript.Tick();
+
+                break;
+              }
+
+              // System functions
+              else if (isSystemFunction)
+              {
+                Debug.Log($"Firing system function: {accessorLastSave}:{functionName}");
+                var systemFunction = s_Singleton._systemFunctions[functionName];
+                var systemReturnData = systemFunction.Execute(this, accessorLastSave, functionParameters.ToArray());
+                var returnData = systemReturnData.Data;
+
+                var systemTickCooldown = systemReturnData.TickCooldown;
+                _tickCooldown = systemTickCooldown > -1 ? systemTickCooldown : 0;
+
+                // Check script removed
+                if (!s_Singleton._scripts.ContainsKey(_Id))
+                {
+                  _breakLoop = true;
+                  break;
+                }
+
+                if (returnData != null)
+                {
+
+                  // Handle system function errors
+                  if (returnData.StartsWith("!E"))
+                  {
+                    var errorData = returnData.Split("!E")[1].Split(" ");
+                    var errorCode = errorData[0];
+                    switch (errorCode)
+                    {
+                      case "1000":
+                        logError($"Function {accessorLastSave}.{functionName} not defined");
+                        break;
+                      case "1001":
+                        var numValidParameters = int.Parse(errorData[1]);
+                        logError($"Invalid number of parameters [{functionParameters.Count}] got for function [{functionName}], {numValidParameters} expected");
+                        break;
+                      case "1002":
+                        logError($"Null reference in [{functionName}]");
+                        break;
+
+
+                      case "9000":
+                        var customError = string.Join(" ", errorData[1..]);
+                        logError($"{customError}");
+                        break;
+                      case "9999":
+                        logError($"Not implemented: [{functionName}]");
+                        break;
+
+                      default:
+                        logError($"Unknown error: {errorCode}");
+                        break;
+                    }
+                  }
+
+                  if (parameterCheck)
+                    returnStatement = returnData;
+                }
+
+                //
+                if (systemTickCooldown != 0)
+                {
+                  _breakLoop = true;
+                  break;
+                }
+              }
+
+              break;
           }
-          HandleStatement(line, false);
 
-          //
-          if (breakLoop) break;
+          if (_breakLoop) break;
         }
 
-        // Apply tick cooldown
-        _attachedEntity._TickCooldown = Mathf.Clamp(_attachedEntity._TickCooldown, tickCooldown, 100);
+        return returnStatement;
+      }
+
+      // Log error
+      void logError(string error)
+      {
+
+        // Log
+        var errorString = $"Line [{_lineIndex}]: [{_lineOriginal}] [{error}]";
+        Debug.LogError(errorString);
+        _attachedEntity.AppendLog($"<color=red>{errorString}</color>");
+
+        // Exit loop and remove script
+        _breakLoop = true;
+        ScriptManager.RemoveScript(this, $"!E {error}");
       }
 
     }
@@ -1520,8 +1580,8 @@ namespace SimpleScript
               }
 
               // Get entity by id
-              var entityId = parameters[0];
-              entity = ScriptEntity.GetEntity(int.Parse(entityId));
+              var entityId = int.Parse(parameters[0]);
+              entity = ScriptEntity.GetEntity(entityId);
               if (entity == null)
               {
                 return SystemFunctionReturnData.NullReference();
@@ -1620,7 +1680,7 @@ namespace SimpleScript
           }
 
           // Validate parameters
-          if (parameters.Length != 3)
+          if (parameters.Length != 2)
           {
             return SystemFunctionReturnData.InvalidParameters(2);
           }
@@ -1634,11 +1694,10 @@ namespace SimpleScript
           }
 
           // Get shake params
-          var shakeTime = int.Parse(parameters[1]);
-          var shakeIntensity = int.Parse(parameters[2]);
+          var shakeTime = float.Parse(parameters[1]);
 
           // Shake
-          entity.Shake(shakeTime, shakeIntensity);
+          entity.Shake(shakeTime);
 
           //
           return SystemFunctionReturnData.Success(0);

@@ -282,42 +282,141 @@ namespace SimpleScript
     }
 
     //
-    float _shakeTime, _shakeIntensity;
+    public class Animation
+    {
+
+      ScriptEntity _entity;
+      Transform _billboard { get { return _entity._billboard; } }
+
+      public enum AnimationType
+      {
+        None,
+
+        Move,
+        Attack,
+        Jump,
+
+        Shake,
+      }
+      AnimationType _animationType;
+
+      //
+      float _animationTime, _animationDuration;
+      Vector3 _animationStartPos;
+
+      public Animation(ScriptEntity entity, AnimationType animationType, float duration)
+      {
+        _entity = entity;
+        _animationType = animationType;
+
+        _animationStartPos = _billboard.position;
+
+        _animationDuration = duration;
+        _animationTime = 0f;
+      }
+
+      //
+      public void Update()
+      {
+
+        // Check if animation finished
+        if (_animationTime > _animationDuration)
+        {
+          _entity._currentAnimation = null;
+          return;
+        }
+        _animationTime += Time.deltaTime;
+        var isAnimationComplete = _animationTime > _animationDuration;
+
+        var animationTimeNormalized = _animationTime / _animationDuration;
+        var endPos = _entity.transform.position;
+
+        // Apply animation effect based on type
+        if (isAnimationComplete)
+          switch (_animationType)
+          {
+            case AnimationType.Move:
+            case AnimationType.Jump:
+              _billboard.position = endPos;
+              break;
+
+            case AnimationType.Attack:
+            case AnimationType.Shake:
+              var sprite = _billboard.GetChild(0);
+              sprite.localPosition = Vector3.zero;
+              break;
+          }
+        else
+          switch (_animationType)
+          {
+            case AnimationType.Move:
+              _billboard.position = Vector3.Lerp(_animationStartPos, endPos, animationTimeNormalized);
+              break;
+            case AnimationType.Jump:
+              var position = Vector3.Lerp(_animationStartPos, endPos, animationTimeNormalized);
+              var jumpHeight = 0.5f;
+              position.y += Mathf.Sin(animationTimeNormalized * Mathf.PI) * jumpHeight;
+              _billboard.position = position;
+              break;
+            case AnimationType.Attack:
+              var sprite = _billboard.GetChild(0);
+              // Use sin to make sprite move halfway into tile in front then back
+              _animationStartPos = Vector3.zero;
+              endPos = sprite.localPosition + sprite.transform.forward * 0.5f;
+              position = Vector3.Lerp(_animationStartPos, endPos, Mathf.Sin(animationTimeNormalized * Mathf.PI));
+              sprite.localPosition = position;
+              break;
+
+            case AnimationType.Shake:
+              sprite = _billboard.GetChild(0);
+              var shakeIntensity = 1f;
+              var shakeDisplacement = Random.insideUnitSphere * shakeIntensity * 0.1f;
+              sprite.localPosition = shakeDisplacement;
+              break;
+          }
+      }
+
+    }
+    Animation _currentAnimation;
+    Animation.AnimationType _animationOverride;
+
     void Update()
     {
-      _billboard.LookAt(GameResources._MainCamera.transform);
+      var lookAt = Quaternion.LookRotation(GameResources._MainCamera.transform.position - _billboard.position);
+      _billboard.rotation = lookAt;
+      _billboard.localRotation = Quaternion.Euler(_billboard.localRotation.eulerAngles.x, GameResources._MainCamera.transform.localRotation.eulerAngles.y + 180f, _billboard.localRotation.eulerAngles.z);
 
-      // Lerp position
-      var dis = transform.position - _billboard.position;
-      if (dis.magnitude > 0.05f)
+      // Play animation if exists
+      if (_currentAnimation != null)
       {
-        _billboard.position += 2f * Time.deltaTime * dis.normalized;
-      }
-      else
-      {
-        _billboard.position = transform.position;
-      }
-
-      // Check shake
-      var sprite = _billboard.GetChild(0);
-      if (_shakeTime > 0f)
-      {
-        _shakeTime -= Time.deltaTime;
-        var shakeDisplacement = Random.insideUnitSphere * _shakeIntensity * 0.2f;
-
-        sprite.localPosition = shakeDisplacement;
-      }
-      else
-      {
-        sprite.localPosition = Vector3.zero;
+        _currentAnimation.Update();
       }
     }
 
     //
-    public void Shake(float time, float intensity)
+    void SetAnimation(Animation.AnimationType animationType, float duration)
     {
-      _shakeTime = time;
-      _shakeIntensity = intensity;
+      if (_currentAnimation != null)
+      {
+        Debug.LogWarning($"Trying to set animation [{animationType}] while already playing animation on entity[{_EntityData.Id}]!");
+        return;
+      }
+      if (_animationOverride != Animation.AnimationType.None)
+      {
+        Debug.Log($"Animation [{animationType}] overridden by [{_animationOverride}] on entity[{_EntityData.Id}]!");
+        animationType = _animationOverride;
+      }
+      _currentAnimation = new Animation(this, animationType, duration);
+    }
+    public void SetAnimationOverride(Animation.AnimationType animationType)
+    {
+      _animationOverride = animationType;
+    }
+
+    //
+    public void Shake(float time)
+    {
+      SetAnimation(Animation.AnimationType.Shake, time);
     }
 
     // Increment any scripts on the entity per tick
@@ -591,6 +690,9 @@ namespace SimpleScript
 
       // Set local model to network position
       transform.position = new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z);
+
+      // Animate
+      SetAnimation(Animation.AnimationType.Move, 1f);
 
       return true;
     }
