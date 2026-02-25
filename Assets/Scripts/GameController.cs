@@ -7,6 +7,8 @@ public class GameController : MonoBehaviour
 {
   UIElements _uiElements { get { return UIElements.s_Singleton; } }
 
+  EditorPanel _editorPanel;
+
   public void Start()
   {
     new GameResources();
@@ -14,7 +16,7 @@ public class GameController : MonoBehaviour
     ItemManager.Initialize();
     new PlayerController();
     new UIElements();
-
+    _editorPanel = new EditorPanel();
 
     var playerEntity = new ScriptEntity(0, new Vector3(0, 0, 1), -1);
     playerEntity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
@@ -39,16 +41,16 @@ public class GameController : MonoBehaviour
   }
 
   //
-  float _lastTick,
-    _tickRate = 2f;//0.1f;
+  float _lastTick;
+  public static float s_TickRate = 1f;
   public static int s_CurrentTick;
   void Update()
   {
 
     // Tick scripts
-    if (Time.time - _lastTick > _tickRate)
+    if (Time.time - _lastTick > s_TickRate)
     {
-      _lastTick += _tickRate;
+      _lastTick += s_TickRate;
       s_CurrentTick++;
 
       Debug.Log($"<color=yellow>Tick: {s_CurrentTick}</color>");
@@ -62,6 +64,7 @@ public class GameController : MonoBehaviour
     // Update player
     PlayerController.s_Singleton.Update();
     _uiElements.Update();
+    _editorPanel.Update();
   }
 
 }

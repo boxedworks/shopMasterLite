@@ -1,6 +1,9 @@
 
+_:animate(_entity, "Attack", 2)
 sleep(1)
-_:shake(this, 1)
+
+_:animate(this, "Shake", 1)
 _:giveItem(_entity, 1)
+sleep(1)
 
 exit()

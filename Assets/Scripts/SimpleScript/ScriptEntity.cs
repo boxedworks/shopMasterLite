@@ -333,19 +333,7 @@ namespace SimpleScript
 
         // Apply animation effect based on type
         if (isAnimationComplete)
-          switch (_animationType)
-          {
-            case AnimationType.Move:
-            case AnimationType.Jump:
-              _billboard.position = endPos;
-              break;
-
-            case AnimationType.Attack:
-            case AnimationType.Shake:
-              var sprite = _billboard.GetChild(0);
-              sprite.localPosition = Vector3.zero;
-              break;
-          }
+          OnAnimatedRemoved();
         else
           switch (_animationType)
           {
@@ -360,9 +348,9 @@ namespace SimpleScript
               break;
             case AnimationType.Attack:
               var sprite = _billboard.GetChild(0);
-              // Use sin to make sprite move halfway into tile in front then back
               _animationStartPos = Vector3.zero;
-              endPos = sprite.localPosition + sprite.transform.forward * 0.5f;
+              var localDirection = sprite.InverseTransformDirection(DirectionToVector3(_entity._Direction));
+              endPos = _animationStartPos + localDirection * 0.5f;
               position = Vector3.Lerp(_animationStartPos, endPos, Mathf.Sin(animationTimeNormalized * Mathf.PI));
               sprite.localPosition = position;
               break;
@@ -376,9 +364,30 @@ namespace SimpleScript
           }
       }
 
+      //
+      public void OnAnimatedRemoved()
+      {
+        var endPos = _entity.transform.position;
+
+        switch (_animationType)
+        {
+          case AnimationType.Move:
+          case AnimationType.Jump:
+            _billboard.position = endPos;
+            break;
+
+          case AnimationType.Attack:
+          case AnimationType.Shake:
+            var sprite = _billboard.GetChild(0);
+            sprite.localPosition = Vector3.zero;
+            break;
+        }
+      }
+
     }
     Animation _currentAnimation;
     Animation.AnimationType _animationOverride;
+    float _animationOverrideDuration;
 
     void Update()
     {
@@ -394,29 +403,33 @@ namespace SimpleScript
     }
 
     //
-    void SetAnimation(Animation.AnimationType animationType, float duration)
+    void SetAnimation(Animation.AnimationType animationType, float durationInTicks)
     {
       if (_currentAnimation != null)
       {
-        Debug.LogWarning($"Trying to set animation [{animationType}] while already playing animation on entity[{_EntityData.Id}]!");
-        return;
+        Debug.LogWarning($"Setting animation [{animationType}] while already playing animation on entity[{_EntityData.Id}]!");
+        _currentAnimation.OnAnimatedRemoved();
       }
       if (_animationOverride != Animation.AnimationType.None)
       {
         Debug.Log($"Animation [{animationType}] overridden by [{_animationOverride}] on entity[{_EntityData.Id}]!");
         animationType = _animationOverride;
+        durationInTicks = _animationOverrideDuration;
+
+        _animationOverride = Animation.AnimationType.None;
       }
-      _currentAnimation = new Animation(this, animationType, duration);
+      _currentAnimation = new Animation(this, animationType, durationInTicks * GameController.s_TickRate);
     }
-    public void SetAnimationOverride(Animation.AnimationType animationType)
+    public void SetAnimationOverride(Animation.AnimationType animationType, float durationInTicks)
     {
       _animationOverride = animationType;
+      _animationOverrideDuration = durationInTicks;
     }
 
     //
-    public void Shake(float time)
+    public void Animate(Animation.AnimationType animationType, float durationInTicks)
     {
-      SetAnimation(Animation.AnimationType.Shake, time);
+      SetAnimation(animationType, durationInTicks * GameController.s_TickRate);
     }
 
     // Increment any scripts on the entity per tick
@@ -665,7 +678,7 @@ namespace SimpleScript
       //Debug.Log($"Queued {entityCommand} [{_entityCommandQueue.Count}]");
     }
 
-    public bool TryMove((int, int, int) toPos, bool solidCheck)
+    public bool TryMove((int x, int y, int z) toPos, bool solidCheck)
     {
 
       // Check valid position
@@ -677,9 +690,9 @@ namespace SimpleScript
       // Move position
       RemoveScriptEntity(this);
 
-      _EntityData.X = toPos.Item1;
-      _EntityData.Y = toPos.Item2;
-      _EntityData.Z = toPos.Item3;
+      _EntityData.X = toPos.x;
+      _EntityData.Y = toPos.y;
+      _EntityData.Z = toPos.z;
 
       AddScriptEntity(this);
 
@@ -722,6 +735,17 @@ namespace SimpleScript
       }
 
       return true;
+    }
+    static Vector3 DirectionToVector3(int direction)
+    {
+      switch (direction)
+      {
+        case 0: return new Vector3(0, 0, 1);
+        case 1: return new Vector3(0, 0, -1);
+        case 2: return new Vector3(-1, 0, 0);
+        case 3: return new Vector3(1, 0, 0);
+      }
+      return Vector3.zero;
     }
 
     // Load and attach script to entity

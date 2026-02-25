@@ -774,7 +774,7 @@ namespace SimpleScript
                 }
 
                 // Check string
-                if (word.StartsWith('"') && word.EndsWith('"'))
+                if (IsStringParameter(word))
                 {
                   if (parameterCheck)
                     returnStatement = word;
@@ -1428,7 +1428,7 @@ namespace SimpleScript
                 var position_x = parameters[1];
                 var position_y = parameters[2];
                 var position_z = parameters[3];
-                entity.TryMove((int.Parse(position_x), int.Parse(position_z), int.Parse(position_y)), true);
+                entity.TryMove((int.Parse(position_x), int.Parse(position_y), int.Parse(position_z)), true);
 
                 return SystemFunctionReturnData.Success(0);
 
@@ -1670,7 +1670,7 @@ namespace SimpleScript
 
       // Shake entity
       RegisterSystemFunction(
-        "shake",
+        "animate",
         (ScriptBase script, string accessor, string[] parameters) =>
         {
           // Validate accessor
@@ -1680,9 +1680,9 @@ namespace SimpleScript
           }
 
           // Validate parameters
-          if (parameters.Length != 2)
+          if (parameters.Length != 3)
           {
-            return SystemFunctionReturnData.InvalidParameters(2);
+            return SystemFunctionReturnData.InvalidParameters(3);
           }
 
           // Get entity by id
@@ -1693,11 +1693,49 @@ namespace SimpleScript
             return SystemFunctionReturnData.NullReference();
           }
 
-          // Get shake params
-          var shakeTime = float.Parse(parameters[1]);
+          // Get animation params
+          var animation = Enum.Parse<ScriptEntity.Animation.AnimationType>(GetStringFromParameter(parameters[1]));
+          var animationTime = float.Parse(parameters[2]);
 
-          // Shake
-          entity.Shake(shakeTime);
+          // Animate
+          entity.Animate(animation, animationTime);
+
+          //
+          return SystemFunctionReturnData.Success(0);
+        }
+      );
+
+      // Animate
+      RegisterSystemFunction(
+        "animateOverride",
+        (ScriptBase script, string accessor, string[] parameters) =>
+        {
+          // Validate accessor
+          if (accessor != "_")
+          {
+            return SystemFunctionReturnData.InvalidFunction();
+          }
+
+          // Validate parameters
+          if (parameters.Length != 3)
+          {
+            return SystemFunctionReturnData.InvalidParameters(3);
+          }
+
+          // Get entity by id
+          var entityData = parameters[0];
+          var entity = GetEntityByIdOrStatement(entityData);
+          if (entity == null)
+          {
+            return SystemFunctionReturnData.NullReference();
+          }
+
+          // Get animation params
+          var animation = Enum.Parse<ScriptEntity.Animation.AnimationType>(GetStringFromParameter(parameters[1]));
+          var animationTime = float.Parse(parameters[2]);
+
+          // Animate
+          entity.SetAnimationOverride(animation, animationTime);
 
           //
           return SystemFunctionReturnData.Success(0);
@@ -1767,6 +1805,15 @@ namespace SimpleScript
     static string GetItemStatement(Item item)
     {
       return $"$Item[{item._ItemData.Id}]";
+    }
+
+    static bool IsStringParameter(string param)
+    {
+      return param.StartsWith("\"") && param.EndsWith("\"");
+    }
+    static string GetStringFromParameter(string param)
+    {
+      return param[1..^1];
     }
 
     // Variable applied to entities and can be referened in scripts (ex: health)
