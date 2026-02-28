@@ -16,6 +16,7 @@ public class PlayerController
   Vector2Int _mousePosition;
 
   ScriptEntity _selectedEntity;
+  public ScriptEntity _SelectedEntity { get { return _selectedEntity; } }
 
   //
   public PlayerController()
@@ -39,7 +40,7 @@ public class PlayerController
   void HandleInput()
   {
     // Check terminal is not focused
-    if (!Terminal.IsFocused)
+    if (!UIElements._IsAnyPanelFocused)
     {
 
       // Move camera with WASD
@@ -84,7 +85,7 @@ public class PlayerController
       }
 
       // Tile select
-      else
+      else if (!UIElements._IsAnyPanelFocused)
       {
         UpdateMouseSelectedUI(_mousePosition.x, _mousePosition.y);
 
@@ -93,7 +94,9 @@ public class PlayerController
         _selectedEntity = entity;
 
         if (_selectedEntity != null)
-          StatusPanel.StatusPanelManager.TryCreateStatusForEntity_S(_selectedEntity);
+        {
+          _uiElements.HandleEntityClick(_selectedEntity);
+        }
       }
     }
 

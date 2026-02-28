@@ -17,7 +17,7 @@ namespace CustomUI
     int _terminalHistoryLines, _terminalHistoryMaxLines = 13;
     string _currentInput;
 
-    public static bool IsFocused { get { return EventSystem.current.currentSelectedGameObject == s_Singleton._tmpInput.gameObject; } }
+    public static bool _IsFocused { get { return EventSystem.current.currentSelectedGameObject == s_Singleton._tmpInput.gameObject; } }
 
     public Terminal()
     {

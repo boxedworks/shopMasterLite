@@ -1,4 +1,5 @@
 
+up()
 down()
 
 var fence = get()

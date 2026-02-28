@@ -71,7 +71,7 @@ namespace SimpleScript
 
         var newItem = new Item(itemId);
         storage[i] = newItem;
-        entity.UpdateUIs();
+        entity.OnItemGiven();
 
         return newItem;
       }

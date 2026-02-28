@@ -1,9 +1,11 @@
 
-_:animate(_entity, "Attack", 2)
-sleep(1)
+_:animate(_entity, "Attack", 6)
+sleep(3)
 
-_:animate(this, "Shake", 1)
+_:animate(this, "Shake", 6)
+_:sfx(this, "Rock", "Hit", 0.13)
+
 _:giveItem(_entity, 1)
-sleep(1)
+sleep(5)
 
 exit()

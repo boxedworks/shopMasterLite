@@ -67,6 +67,7 @@ ExportedObj/
 *.mat
 
 *.png
+*.wav
 
 # Unity3D generated meta files
 *.meta

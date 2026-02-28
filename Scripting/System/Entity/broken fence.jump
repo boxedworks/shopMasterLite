@@ -1,10 +1,10 @@
-_:animateOverride(_entity, "Jump", 1)
+_:animateOverride(_entity, "Jump", 5)
 if(_entity.z < this.z)
   _:move(_entity, _entity.x, _entity.y, _entity.z + 2)
 else
   _:move(_entity, _entity.x, _entity.y, _entity.z - 2)
 end
 
-sleep(1)
+sleep(6)
 
-exit(4)
+exit()

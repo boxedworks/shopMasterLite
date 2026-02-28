@@ -7,8 +7,6 @@ public class GameController : MonoBehaviour
 {
   UIElements _uiElements { get { return UIElements.s_Singleton; } }
 
-  EditorPanel _editorPanel;
-
   public void Start()
   {
     new GameResources();
@@ -16,14 +14,9 @@ public class GameController : MonoBehaviour
     ItemManager.Initialize();
     new PlayerController();
     new UIElements();
-    _editorPanel = new EditorPanel();
+    new SfxController();
 
-    var playerEntity = new ScriptEntity(0, new Vector3(0, 0, 1), -1);
-    playerEntity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
-    {
-      PathTo = "test",
-      ScriptType = ScriptManager.ScriptType.PLAYER
-    });
+    var playerEntity = new ScriptEntity(0, new Vector3(0, 0, 1), 0);
     playerEntity._EntityData.ItemStorage = new();
     for (int i = 0; i < 4; i++)
       playerEntity._Storage.Add(null);
@@ -42,7 +35,7 @@ public class GameController : MonoBehaviour
 
   //
   float _lastTick;
-  public static float s_TickRate = 1f;
+  public static float s_TickRate = 0.1f;
   public static int s_CurrentTick;
   void Update()
   {
@@ -53,7 +46,7 @@ public class GameController : MonoBehaviour
       _lastTick += s_TickRate;
       s_CurrentTick++;
 
-      Debug.Log($"<color=yellow>Tick: {s_CurrentTick}</color>");
+      //Debug.Log($"<color=yellow>Tick: {s_CurrentTick}</color>");
       ScriptManager.TickScripts();
       ScriptEntity.TickScriptEntities();
     }
@@ -63,8 +56,9 @@ public class GameController : MonoBehaviour
 
     // Update player
     PlayerController.s_Singleton.Update();
+
     _uiElements.Update();
-    _editorPanel.Update();
+    SfxController.Update();
   }
 
 }

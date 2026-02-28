@@ -161,6 +161,7 @@ namespace SimpleScript
     {
       public int _Id, _OwnerId;
       string _codeRaw;
+      public string _CodeRaw { get { return _codeRaw; } }
       bool _isEnabled, _breakLoop;
       int _tickCooldown;
       public void Enable()
@@ -184,6 +185,7 @@ namespace SimpleScript
 
       //
       bool _isValid;
+      public bool _IsValid { get { return _isValid; } }
       public void RemoveScript()
       {
         _isValid = false;
@@ -192,6 +194,11 @@ namespace SimpleScript
       // Lines in the script
       string[] _lines;
       string _line, _lineOriginal;
+
+      //
+      string _error;
+      public string _Error { get { return _error; } }
+      public bool _HasError { get { return _error != null; } }
 
       // Current line index
       int _lineIndex,
@@ -204,6 +211,8 @@ namespace SimpleScript
 
         // Last tick ran
         _lastTick;
+
+      public int _LineIndex { get { return _lineIndex; } }
 
       Dictionary<string, string> _variables;
 
@@ -251,7 +260,7 @@ namespace SimpleScript
       public void Tick(bool forceTick = false)
       {
 
-        Debug.Log($"Attempting to tick script: {_attachedEntity._EntityTypeData.Name}");
+        //Debug.Log($"Attempting to tick script: {_attachedEntity._EntityTypeData.Name}");
 
         // Check can tick
         if (!_isEnabled || !_isValid) return;
@@ -282,10 +291,6 @@ namespace SimpleScript
             Init(); // Loop
           }
 
-          // Gather line
-          _line = _lines[_lineIndex++].Trim();
-          _lineOriginal = _line;
-
           // Check external return statement
           if (_externalReturnData != null)
           {
@@ -310,9 +315,16 @@ namespace SimpleScript
             _externalReturnData = _externalReturnStatement = _externalLine = null;
           }
 
+          // Gather line normally
+          else
+          {
+            _line = _lines[_lineIndex++].Trim();
+          }
+          _lineOriginal = _line;
+
           // Check blank line
           if (_line.Length == 0) continue;
-          Debug.Log("Read line: " + _line);
+          //Debug.Log("Read line: " + _line);
 
           // Check comment
           if (_line.StartsWith(@"//") || _line.StartsWith("#") || _line.StartsWith("$"))
@@ -450,7 +462,7 @@ namespace SimpleScript
           if (accessor == pair.Key)
           {
             var gotVariable = CheckSubstitueVariable(pair.Value);
-            Debug.Log($"Substituted variable: {accessor} => {gotVariable}");
+            //Debug.Log($"Substituted variable: {accessor} => {gotVariable}");
             return gotVariable;
           }
         }
@@ -664,7 +676,7 @@ namespace SimpleScript
         var currentWord = "";
         var wordType = -1;
         var functionCounter = 0;
-        Debug.Log($"Handling statement: {statement}");
+        //Debug.Log($"Handling statement: {statement}");
         for (var i = 0; i < statement.Length; i++)
         {
           var letter = statement[i];
@@ -749,7 +761,7 @@ namespace SimpleScript
             // Variable
             case 0:
 
-              Debug.Log($"Checking variable {word}");
+              //Debug.Log($"Checking variable {word}");
 
               var accessorLastSave = accessorLast;
               accessorLast = word;
@@ -859,7 +871,7 @@ namespace SimpleScript
             // Function
             case 1:
 
-              Debug.Log($"Checking function {word}");
+              //Debug.Log($"Checking function {word}");
 
               accessorLastSave = accessorLast;
               accessorLast = "";
@@ -954,7 +966,7 @@ namespace SimpleScript
                 }
               }
 
-              Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. {_breakLoop}");
+              //Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. {_breakLoop}");
 
               if (_breakLoop) break;
 
@@ -1061,7 +1073,7 @@ namespace SimpleScript
                 }
 
                 // Fire function
-                Debug.Log($"Firing entity function: {currentTarget._Type}:{functionName}");
+                //Debug.Log($"Firing entity function: {currentTarget._Type}:{functionName}");
 
                 // Attach to entity interacting with
                 var entityScript = currentTarget._ScriptEntity.LoadAndAttachScript(new ScriptLoadData()
@@ -1104,7 +1116,7 @@ namespace SimpleScript
               {
 
                 // Fire function
-                Debug.Log($"Firing item function: {currentTarget._Type}:{functionName}");
+                //Debug.Log($"Firing item function: {currentTarget._Type}:{functionName}");
 
                 // Attach to entity wielding item
                 var itemScript = _attachedEntity.LoadAndAttachScript(new ScriptLoadData()
@@ -1144,7 +1156,7 @@ namespace SimpleScript
               // System functions
               else if (isSystemFunction)
               {
-                Debug.Log($"Firing system function: {accessorLastSave}:{functionName}");
+                //Debug.Log($"Firing system function: {accessorLastSave}:{functionName}");
                 var systemFunction = s_Singleton._systemFunctions[functionName];
                 var systemReturnData = systemFunction.Execute(this, accessorLastSave, functionParameters.ToArray());
                 var returnData = systemReturnData.Data;
@@ -1227,6 +1239,7 @@ namespace SimpleScript
 
         // Exit loop and remove script
         _breakLoop = true;
+        _error = error;
         ScriptManager.RemoveScript(this, $"!E {error}");
       }
 
@@ -1736,6 +1749,53 @@ namespace SimpleScript
 
           // Animate
           entity.SetAnimationOverride(animation, animationTime);
+
+          //
+          return SystemFunctionReturnData.Success(0);
+        }
+      );
+
+      // Play sfx
+      RegisterSystemFunction(
+        "sfx",
+        (ScriptBase script, string accessor, string[] parameters) =>
+        {
+          // Validate accessor
+          if (accessor != "_")
+          {
+            return SystemFunctionReturnData.InvalidFunction();
+          }
+
+          // Validate parameters
+          if (parameters.Length != 4)
+          {
+            return SystemFunctionReturnData.InvalidParameters(4);
+          }
+
+          // Get entity by id
+          var entityData = parameters[0];
+          var entity = GetEntityByIdOrStatement(entityData);
+          if (entity == null)
+          {
+            return SystemFunctionReturnData.NullReference();
+          }
+
+          // Get sfx params
+          var sfxFolderName = Enum.Parse<SfxController.AudioObjectType>(GetStringFromParameter(parameters[1]));
+          var sfxName = -1;
+          if (sfxFolderName == SfxController.AudioObjectType.Character)
+            sfxName = (int)Enum.Parse<SfxController.CharacterSfx>(GetStringFromParameter(parameters[2]));
+          else if (sfxFolderName == SfxController.AudioObjectType.Rock)
+            sfxName = (int)Enum.Parse<SfxController.RockSfx>(GetStringFromParameter(parameters[2]));
+          else if (sfxFolderName == SfxController.AudioObjectType.PlayerController)
+            sfxName = (int)Enum.Parse<SfxController.PlayerControllerSfx>(GetStringFromParameter(parameters[2]));
+          if (sfxName == -1)
+            return SystemFunctionReturnData.Custom("Sfx not found");
+
+          var volume = float.Parse(parameters[3]);
+
+          // Play sfx
+          SfxController.PlaySfxAt(entity._Transform.position, sfxFolderName, sfxName, volume);
 
           //
           return SystemFunctionReturnData.Success(0);

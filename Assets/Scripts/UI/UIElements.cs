@@ -6,6 +6,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 using System.Linq;
+using SimpleScript;
 
 namespace CustomUI
 {
@@ -21,7 +22,20 @@ namespace CustomUI
     RectTransform _draggingPanel;
     Vector3 _dragDelta;
 
-    public GameObject _StatusPanel, _InventoryPanel, _LoggerPanel;
+    public GameObject _StatusPanel, _InventoryPanel, _LoggerPanel, _ScriptsPanel;
+
+    EditorPanel _editorPanel;
+
+    //
+    public static bool _IsAnyPanelFocused
+    {
+      get
+      {
+        return
+          Terminal._IsFocused ||
+          s_Singleton._editorPanel._IsFocused;
+      }
+    }
 
     //
     public UIElements()
@@ -43,8 +57,12 @@ namespace CustomUI
       _LoggerPanel = statusPanels.GetChild(2).gameObject;
       _LoggerPanel.SetActive(false);
 
+      _ScriptsPanel = statusPanels.GetChild(3).gameObject;
+      _ScriptsPanel.SetActive(false);
+
       // Initialize other UI systems
       new StatusPanel.StatusPanelManager();
+      _editorPanel = new EditorPanel();
     }
 
     //
@@ -59,6 +77,9 @@ namespace CustomUI
         if (Mouse.current.leftButton.wasReleasedThisFrame)
           _draggingPanel = null;
       }
+
+      //
+      _editorPanel.Update();
     }
 
     // Keep panel from going off screen keeping into account recttransform pivot
@@ -80,7 +101,6 @@ namespace CustomUI
     {
       if (EventSystem.current.IsPointerOverGameObject())
       {
-
         var pointerEventData = new PointerEventData(EventSystem.current)
         {
           position = Mouse.current.position.ReadValue()
@@ -102,13 +122,25 @@ namespace CustomUI
               _draggingPanel.SetAsLastSibling();
 
               _dragDelta = _draggingPanel.position - new Vector3(Mouse.current.position.ReadValue().x, Mouse.current.position.ReadValue().y, 0);
-              return true;
             }
           }
+          return true;
         }
       }
 
       return false;
+    }
+
+    //
+    public void HandleEntityClick(ScriptEntity entity)
+    {
+      StatusPanel.StatusPanelManager.TryCreateStatusForEntity_S(entity);
+
+      //
+      if (entity._AttachedScripts != null)
+      {
+        _editorPanel.AttachScript(entity._AttachedScripts[0]);
+      }
     }
 
     //

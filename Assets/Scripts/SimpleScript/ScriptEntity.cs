@@ -25,11 +25,14 @@ namespace SimpleScript
     public int _EntityType { get { return _EntityTypeData.Id; } }
     public (int x, int y, int z) _TilePosition { get { return (_EntityData.X, _EntityData.Y, _EntityData.Z); } }
     public int _Direction { get { return _EntityData.Direction; } }
+    public bool _IsPlayer { get { return _EntityData.OwnerId == 0; } }
     public List<Item> _Storage { get { return _EntityData.ItemStorage; } }
     public bool _HasStorage { get { return (_Storage?.Count ?? 0) > 0; } }
+    public bool _HasLog { get { return (_EntityData.Log?.Count ?? 0) > 0; } }
     bool _spawned;
 
     Transform transform;
+    public Transform _Transform { get { return transform; } }
 
     // Handles tick-updating of entity
     Queue<EntityCommand> _entityCommandQueue;
@@ -37,6 +40,10 @@ namespace SimpleScript
     int _tickCooldown;
     public int _TickCooldown { get { return _tickCooldown; } set { _tickCooldown = value; } }
     public bool _CanTick { get { return _tickCooldown == 0 && !_hasEntityCommands; } }
+
+    //
+    List<ScriptManager.ScriptBase> _attachedScripts;
+    public List<ScriptManager.ScriptBase> _AttachedScripts { get { return _attachedScripts; } }
 
     // Holds local entity variables; ex: health
     Dictionary<string, int> _entityVariableMappings;
@@ -313,6 +320,18 @@ namespace SimpleScript
 
         _animationDuration = duration;
         _animationTime = 0f;
+
+        // Play sfx
+        switch (animationType)
+        {
+          case AnimationType.Move:
+            SfxController.PlaySfxAt(entity.transform.position, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Move, 0.13f);
+            break;
+
+          case AnimationType.Jump:
+            SfxController.PlaySfxAt(entity.transform.position, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump, 0.3f);
+            break;
+        }
       }
 
       //
@@ -350,7 +369,7 @@ namespace SimpleScript
               var sprite = _billboard.GetChild(0);
               _animationStartPos = Vector3.zero;
               var localDirection = sprite.InverseTransformDirection(DirectionToVector3(_entity._Direction));
-              endPos = _animationStartPos + localDirection * 0.5f;
+              endPos = _animationStartPos + localDirection * 0.65f;
               position = Vector3.Lerp(_animationStartPos, endPos, Mathf.Sin(animationTimeNormalized * Mathf.PI));
               sprite.localPosition = position;
               break;
@@ -380,6 +399,14 @@ namespace SimpleScript
           case AnimationType.Shake:
             var sprite = _billboard.GetChild(0);
             sprite.localPosition = Vector3.zero;
+            break;
+        }
+
+        // Check sfx
+        switch (_animationType)
+        {
+          case AnimationType.Jump:
+            SfxController.PlaySfxAt(_entity.transform.position, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump_Land, 0.2f);
             break;
         }
       }
@@ -429,7 +456,7 @@ namespace SimpleScript
     //
     public void Animate(Animation.AnimationType animationType, float durationInTicks)
     {
-      SetAnimation(animationType, durationInTicks * GameController.s_TickRate);
+      SetAnimation(animationType, durationInTicks);
     }
 
     // Increment any scripts on the entity per tick
@@ -447,6 +474,9 @@ namespace SimpleScript
           HandleCommand(commandNext);
         }
       }
+
+      //
+      StatusPanel.StatusPanelManager.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Scripts);
     }
 
     //
@@ -705,7 +735,7 @@ namespace SimpleScript
       transform.position = new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z);
 
       // Animate
-      SetAnimation(Animation.AnimationType.Move, 1f);
+      SetAnimation(Animation.AnimationType.Move, _TICKS_PER_MOVEMENT);
 
       return true;
     }
@@ -759,11 +789,48 @@ namespace SimpleScript
         _ => ScriptManager.LoadPlayerScript(scriptLoadData.PathTo)
       });
 
-      return ScriptManager.s_Singleton.AttachScriptTo(
+      var newScript = ScriptManager.s_Singleton.AttachScriptTo(
         this,
         rawScript,
         _EntityData.OwnerId
       );
+
+      if (_attachedScripts == null)
+      {
+        _attachedScripts = new();
+      }
+      else
+      {
+        for (var i = _attachedScripts.Count - 1; i >= 0; i--)
+        {
+          var attachedScript = _attachedScripts[i];
+          if (!attachedScript._IsValid)
+          {
+            _attachedScripts.RemoveAt(i);
+          }
+        }
+      }
+
+      _attachedScripts.Add(newScript);
+      return newScript;
+    }
+
+    //
+    public void DetachScript(ScriptManager.ScriptBase script)
+    {
+      if (_attachedScripts == null || !_attachedScripts.Contains(script))
+      {
+        Debug.LogWarning($"Trying to detach script that is not attached to entity[{_EntityData.Id}]!");
+        return;
+      }
+
+      _attachedScripts.Remove(script);
+
+      //
+      if (_attachedScripts.Count == 0)
+      {
+        _attachedScripts = null;
+      }
     }
 
     //
@@ -791,11 +858,10 @@ namespace SimpleScript
       return string.Join("\n", _EntityData.Log);
     }
 
-    // Update menus associated with entities; ex: status panel
-    public void UpdateUIs()
+    //
+    public void OnItemGiven()
     {
       StatusPanel.StatusPanelManager.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Inventory);
     }
-
   }
 }

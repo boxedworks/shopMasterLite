@@ -14,6 +14,7 @@ namespace CustomUI
 
       Inventory,
       Logger,
+      Scripts,
     }
 
     //
@@ -84,6 +85,9 @@ namespace CustomUI
             case SubPanelType.Logger:
               statusPanel.UpdateLoggerText();
               break;
+            case SubPanelType.Scripts:
+              statusPanel.UpdateScriptsPanel();
+              break;
           }
         }
       }
@@ -119,44 +123,7 @@ namespace CustomUI
 
       // Register buttons
       {
-        var buttons = body.GetChild(1);
-        var buttonBase = buttons.GetChild(0).gameObject;
-
-        GameObject getButton(int buttonIndex)
-        {
-          return buttonIndex == 0 ? buttonBase : GameObject.Instantiate(buttonBase, buttons);
-        }
-        void configureButton(GameObject button, SubPanelType subPanelType, string iconName)
-        {
-          button.name = $"{subPanelType}";
-
-          var icon = button.transform.GetChild(0).GetComponent<Image>();
-          var loadedSprite = Resources.Load<Sprite>($"Images/UI/{iconName}");
-          icon.sprite = loadedSprite;
-
-          var buttonComponent = button.AddComponent<Button>();
-          buttonComponent.onClick.AddListener(() =>
-          {
-            OnStatusButtonClicked(subPanelType);
-          });
-        }
-
-        // Gather buttons
-        var hasInventory = _entity._HasStorage;
-        var hasLog = true;
-        int buttonCount = (hasInventory ? 1 : 0) + (hasLog ? 1 : 0);
-        var buttonList = new List<GameObject>();
-        for (int i = 0; i < buttonCount; i++)
-          buttonList.Add(getButton(i));
-        int currentButtonIndex = 0;
-
-        // Inventory button
-        if (hasInventory)
-          configureButton(buttonList[currentButtonIndex++], SubPanelType.Inventory, "backpack");
-
-        // Logger button
-        if (hasLog)
-          configureButton(buttonList[currentButtonIndex++], SubPanelType.Logger, "script");
+        RegisterButtons();
 
         // Close button
         var closeButton = _panel.GetChild(0).GetChild(1).GetComponent<Button>();
@@ -168,6 +135,62 @@ namespace CustomUI
 
       // Show panel
       _panel.gameObject.SetActive(true);
+    }
+
+    //
+    void RegisterButtons()
+    {
+      var body = _panel.GetChild(1);
+
+      var buttons = body.GetChild(1);
+      var buttonBase = buttons.GetChild(0).gameObject;
+
+      // Clean up old
+      for (var i = buttons.childCount - 1; i > 0; i--)
+        Object.DestroyImmediate(buttons.GetChild(i).gameObject);
+      Object.DestroyImmediate(buttonBase.gameObject.GetComponent<Button>());
+
+      // Set new buttons
+      GameObject getButton(int buttonIndex)
+      {
+        return buttonIndex == 0 ? buttonBase : Object.Instantiate(buttonBase, buttons);
+      }
+      void configureButton(GameObject button, SubPanelType subPanelType, string iconName)
+      {
+        button.name = $"{subPanelType}";
+
+        var icon = button.transform.GetChild(0).GetComponent<Image>();
+        var loadedSprite = Resources.Load<Sprite>($"Images/UI/{iconName}");
+        icon.sprite = loadedSprite;
+
+        var buttonComponent = button.AddComponent<Button>();
+        buttonComponent.onClick.AddListener(() =>
+        {
+          OnStatusButtonClicked(subPanelType);
+        });
+      }
+
+      // Gather buttons
+      var hasInventory = _entity._HasStorage;
+      var hasLog = true;//_entity._HasLog;
+      var hasScripts = true;
+      int buttonCount = (hasInventory ? 1 : 0) + (hasLog ? 1 : 0) + (hasScripts ? 1 : 0);
+      var buttonList = new List<GameObject>();
+      for (int i = 0; i < buttonCount; i++)
+        buttonList.Add(getButton(i));
+      int currentButtonIndex = 0;
+
+      // Inventory button
+      if (hasInventory)
+        configureButton(buttonList[currentButtonIndex++], SubPanelType.Inventory, "backpack");
+
+      // Scripts button
+      if (hasScripts)
+        configureButton(buttonList[currentButtonIndex++], SubPanelType.Scripts, "script");
+
+      // Logger button
+      if (hasLog)
+        configureButton(buttonList[currentButtonIndex++], SubPanelType.Logger, "script");
     }
 
     //
@@ -186,6 +209,12 @@ namespace CustomUI
             OpenLoggerPanel();
           else
             CloseLoggerPanel();
+          break;
+        case SubPanelType.Scripts:
+          if (!_openSubPanels.ContainsKey(SubPanelType.Scripts))
+            OpenScriptsPanel();
+          else
+            CloseScriptsPanel();
           break;
       }
     }
@@ -299,6 +328,59 @@ namespace CustomUI
       var panel = _openSubPanels[SubPanelType.Logger];
       var logText = panel.GetChild(1).GetChild(0).GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
       logText.text = _entity.GetLogString();
+    }
+
+    //
+    void OpenScriptsPanel()
+    {
+      var panelBase = UIElements.s_Singleton._ScriptsPanel;
+      var panel = GameObject.Instantiate(panelBase, _panel.GetChild(1)).transform as RectTransform;
+
+      //
+      _openSubPanels.Add(SubPanelType.Scripts, panel);
+      panel.gameObject.SetActive(true);
+
+      //
+      UpdateScriptsPanel();
+    }
+    void CloseScriptsPanel()
+    {
+      ClosePanel(SubPanelType.Scripts);
+    }
+    void UpdateScriptsPanel()
+    {
+      var panel = _openSubPanels[SubPanelType.Scripts];
+      var scriptText = panel.GetChild(1).GetChild(0).GetChild(0).GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
+      var button = panel.GetChild(1).GetChild(0).GetChild(0).GetChild(1).GetComponent<Button>();
+      if (_entity._AttachedScripts == null)
+      {
+        scriptText.text = "No scripts attached.";
+
+        button.onClick.RemoveAllListeners();
+        if (_entity._IsPlayer)
+          button.onClick.AddListener(() =>
+          {
+            _entity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
+            {
+              PathTo = "test",
+              ScriptType = ScriptManager.ScriptType.PLAYER
+            });
+            UpdateScriptsPanel();
+          });
+        return;
+      }
+      var script = _entity._AttachedScripts[0];
+      string scriptStatus;
+      if (script._IsValid)
+        scriptStatus = "<color=blue>Running</color>";
+      else if (script._HasError)
+        scriptStatus = "<color=red>Error</color>";
+      else
+        scriptStatus = "Exited";
+      scriptText.text = $@"<b>Name: test</b>
+<b>State: {scriptStatus}</b>";
+
+      button.onClick.RemoveAllListeners();
     }
 
     void ClosePanel(SubPanelType panelKey)
