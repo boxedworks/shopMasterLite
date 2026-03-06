@@ -29,10 +29,20 @@ namespace SimpleScript
     public List<Item> _Storage { get { return _EntityData.ItemStorage; } }
     public bool _HasStorage { get { return (_Storage?.Count ?? 0) > 0; } }
     public bool _HasLog { get { return (_EntityData.Log?.Count ?? 0) > 0; } }
-    bool _spawned;
+    bool _spawned, _scriptSpawned;
+    public bool _ScriptSpawned { get { return _scriptSpawned; } set { _scriptSpawned = value; } }
 
     Transform transform;
     public Transform _Transform { get { return transform; } }
+
+    // VFX
+    Transform _billboard;
+    Transform _sprite { get { return _billboard.GetChild(0); } }
+
+    // Animation data
+    Animation _currentAnimation;
+    Animation.AnimationType _animationOverride;
+    float _animationOverrideDuration;
 
     // Handles tick-updating of entity
     Queue<EntityCommand> _entityCommandQueue;
@@ -117,8 +127,11 @@ namespace SimpleScript
       LoadModel();
 
       // Set position
-      TryMove(_TilePosition, false);
+      TryMove(_TilePosition, false, false);
       TrySetDirection(_Direction);
+
+      //
+      _scriptSpawned = true;
     }
 
     // Initialize a script entity using loaded entity data
@@ -135,15 +148,29 @@ namespace SimpleScript
       LoadModel();
 
       // Set position
-      TryMove(_TilePosition, false);
+      TryMove(_TilePosition, false, false);
       TrySetDirection(_Direction);
     }
 
     // Remove entity
     public void Destroy()
     {
-      //RemoveScriptEntity(this);
-      Debug.Log("Not implemented: ScriptEntity.Destroy()");
+      if (!_spawned)
+      {
+        Debug.LogWarning($"Trying to destroy entity[{_EntityData.Id}] that is not spawned!");
+        return;
+      }
+      Debug.Log("Destroying entity[" + _EntityTypeData.Name + "]");
+      _spawned = false;
+
+      RemoveScriptEntity(this);
+      if (_attachedScripts != null)
+        foreach (var script in _attachedScripts)
+          if (script._IsValid)
+            ScriptManager.RemoveScript(script);
+
+      Object.Destroy(transform.gameObject);
+      Object.Destroy(_billboard.gameObject);
     }
     public static void DestroyEntity(ScriptEntity entity)
     {
@@ -195,13 +222,13 @@ namespace SimpleScript
     {
       return !TileHasEntities(pos) ? 0 : s_ScriptEntitiesMapped[pos].Count;
     }
-    static bool TileHasSolidEntity((int, int, int) pos)
+    static bool TileHasSolidEntity((int, int, int) pos, int ignoreEntityId = -1)
     {
       if (!TileHasEntities(pos))
         return false;
 
       foreach (var entity in GetTileEntities(pos))
-        if (entity._isSolid) return true;
+        if (entity._isSolid && entity._EntityData.Id != ignoreEntityId) return true;
       return false;
     }
 
@@ -266,7 +293,6 @@ namespace SimpleScript
     }
 
     // Load model from entity type
-    Transform _billboard;
     void LoadModel()
     {
       var modelName = _EntityTypeData.Name;
@@ -294,6 +320,7 @@ namespace SimpleScript
 
       ScriptEntity _entity;
       Transform _billboard { get { return _entity._billboard; } }
+      Transform _sprite { get { return _entity._sprite; } }
 
       public enum AnimationType
       {
@@ -366,19 +393,17 @@ namespace SimpleScript
               _billboard.position = position;
               break;
             case AnimationType.Attack:
-              var sprite = _billboard.GetChild(0);
               _animationStartPos = Vector3.zero;
-              var localDirection = sprite.InverseTransformDirection(DirectionToVector3(_entity._Direction));
+              var localDirection = _sprite.InverseTransformDirection(DirectionToVector3(_entity._Direction));
               endPos = _animationStartPos + localDirection * 0.65f;
               position = Vector3.Lerp(_animationStartPos, endPos, Mathf.Sin(animationTimeNormalized * Mathf.PI));
-              sprite.localPosition = position;
+              _sprite.localPosition = position;
               break;
 
             case AnimationType.Shake:
-              sprite = _billboard.GetChild(0);
               var shakeIntensity = 1f;
               var shakeDisplacement = Random.insideUnitSphere * shakeIntensity * 0.1f;
-              sprite.localPosition = shakeDisplacement;
+              _sprite.localPosition = shakeDisplacement;
               break;
           }
       }
@@ -397,8 +422,7 @@ namespace SimpleScript
 
           case AnimationType.Attack:
           case AnimationType.Shake:
-            var sprite = _billboard.GetChild(0);
-            sprite.localPosition = Vector3.zero;
+            _sprite.localPosition = Vector3.zero;
             break;
         }
 
@@ -412,9 +436,6 @@ namespace SimpleScript
       }
 
     }
-    Animation _currentAnimation;
-    Animation.AnimationType _animationOverride;
-    float _animationOverrideDuration;
 
     void Update()
     {
@@ -486,12 +507,6 @@ namespace SimpleScript
       _entityVariableMappings = new Dictionary<string, int>();
       for (var i = 0; i < _EntityData.EntityVariables_Int.Count; i++)
         _entityVariableMappings.Add(_EntityData.EntityVariables_Int[i].Name, i);
-    }
-
-    void OnDestroy()
-    {
-      if (_spawned)
-        RemoveScriptEntity(this);
     }
 
     // Saveable data for the entity
@@ -708,11 +723,11 @@ namespace SimpleScript
       //Debug.Log($"Queued {entityCommand} [{_entityCommandQueue.Count}]");
     }
 
-    public bool TryMove((int x, int y, int z) toPos, bool solidCheck)
+    public bool TryMove((int x, int y, int z) toPos, bool solidCheck, bool animate = true)
     {
 
       // Check valid position
-      if (solidCheck && TileHasSolidEntity(toPos))
+      if (solidCheck && TileHasSolidEntity(toPos, _EntityData.Id))
       {
         return false;
       }
@@ -735,7 +750,10 @@ namespace SimpleScript
       transform.position = new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z);
 
       // Animate
-      SetAnimation(Animation.AnimationType.Move, _TICKS_PER_MOVEMENT);
+      if (animate)
+        SetAnimation(Animation.AnimationType.Move, _TICKS_PER_MOVEMENT);
+      else
+        _billboard.position = transform.position;
 
       return true;
     }
@@ -779,16 +797,8 @@ namespace SimpleScript
     }
 
     // Load and attach script to entity
-    public ScriptManager.ScriptBase LoadAndAttachScript(ScriptManager.ScriptLoadData scriptLoadData)
+    public ScriptManager.ScriptBase LoadAndAttachRawScript(string rawScript)
     {
-      var rawScript = (scriptLoadData.Headers != null ? scriptLoadData.Headers + "\n" : "") + (scriptLoadData.ScriptType switch
-      {
-        ScriptManager.ScriptType.ENTITY => ScriptManager.LoadSystemEntityScript(scriptLoadData.PathTo),
-        ScriptManager.ScriptType.ITEM => ScriptManager.LoadSystemItemScript(scriptLoadData.PathTo),
-
-        _ => ScriptManager.LoadPlayerScript(scriptLoadData.PathTo)
-      });
-
       var newScript = ScriptManager.s_Singleton.AttachScriptTo(
         this,
         rawScript,
@@ -813,6 +823,18 @@ namespace SimpleScript
 
       _attachedScripts.Add(newScript);
       return newScript;
+    }
+    public ScriptManager.ScriptBase LoadAndAttachScript(ScriptManager.ScriptLoadData scriptLoadData)
+    {
+      var rawScript = (scriptLoadData.Headers != null ? scriptLoadData.Headers + "\n" : "") + (scriptLoadData.ScriptType switch
+      {
+        ScriptManager.ScriptType.ENTITY => ScriptManager.LoadSystemEntityScript(scriptLoadData.PathTo),
+        ScriptManager.ScriptType.ITEM => ScriptManager.LoadSystemItemScript(scriptLoadData.PathTo),
+
+        _ => ScriptManager.LoadPlayerScript(scriptLoadData.PathTo)
+      });
+
+      return LoadAndAttachRawScript(rawScript);
     }
 
     //

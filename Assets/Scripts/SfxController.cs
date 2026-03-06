@@ -6,6 +6,8 @@ using UnityEngine;
 public class SfxController
 {
 
+  Transform _container;
+
   public static SfxController s_Singleton;
   public SfxController()
   {
@@ -20,6 +22,9 @@ public class SfxController
       { AudioObjectType.Character, GetAudioObject(AudioObjectType.Character) },
       { AudioObjectType.Rock, GetAudioObject(AudioObjectType.Rock) },
     };
+
+    //
+    _container = new GameObject("Sfx").transform;
   }
 
   //
@@ -55,7 +60,8 @@ public class SfxController
 
   public static AudioSource PlaySfxAt(Vector3 position, AudioObjectType audioObjectType, int clipIndex, float volume = 1f, float minPitch = 0.85f, float maxPitch = 1.15f)
   {
-    var audioSource = new GameObject($"{audioObjectType}[{clipIndex}]").AddComponent<AudioSource>();
+    var audioSource = new GameObject($"sfx_{audioObjectType}[{clipIndex}]").AddComponent<AudioSource>();
+    audioSource.transform.parent = s_Singleton._container;
     var audioObject = s_Singleton._loadedAudioObjects[audioObjectType];
 
     audioSource.transform.position = position;

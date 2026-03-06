@@ -24,7 +24,7 @@ namespace CustomUI
 
     public GameObject _StatusPanel, _InventoryPanel, _LoggerPanel, _ScriptsPanel;
 
-    EditorPanel _editorPanel;
+    public EditorPanel _EditorPanel;
 
     //
     public static bool _IsAnyPanelFocused
@@ -33,7 +33,7 @@ namespace CustomUI
       {
         return
           Terminal._IsFocused ||
-          s_Singleton._editorPanel._IsFocused;
+          s_Singleton._EditorPanel._IsFocused;
       }
     }
 
@@ -62,7 +62,7 @@ namespace CustomUI
 
       // Initialize other UI systems
       new StatusPanel.StatusPanelManager();
-      _editorPanel = new EditorPanel();
+      _EditorPanel = new EditorPanel();
     }
 
     //
@@ -79,7 +79,7 @@ namespace CustomUI
       }
 
       //
-      _editorPanel.Update();
+      _EditorPanel.Update();
     }
 
     // Keep panel from going off screen keeping into account recttransform pivot
@@ -139,7 +139,7 @@ namespace CustomUI
       //
       if (entity._AttachedScripts != null)
       {
-        _editorPanel.AttachScript(entity._AttachedScripts[0]);
+        _EditorPanel.AttachScript(entity._AttachedScripts[0]);
       }
     }
 

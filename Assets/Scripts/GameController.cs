@@ -16,21 +16,41 @@ public class GameController : MonoBehaviour
     new UIElements();
     new SfxController();
 
-    var playerEntity = new ScriptEntity(0, new Vector3(0, 0, 1), 0);
-    playerEntity._EntityData.ItemStorage = new();
-    for (int i = 0; i < 4; i++)
-      playerEntity._Storage.Add(null);
-
-    new ScriptEntity(1, new Vector3(0, 0, 0), -1);
-    new ScriptEntity(2, new Vector3(0, 0, -2), -1);
-
-
     // Initizalize other systems
     new Terminal();
 
     ScriptEntity.ScriptEntityHelper.SaveTypeData();
 
     _lastTick = Time.time;
+
+    //
+    LoadGame();
+  }
+
+  //
+  void LoadGame()
+  {
+
+    // Check for load data, if none, create new game
+    var hasSaveData = false;
+    if (hasSaveData)
+    {
+
+    }
+
+    // New save data
+    else
+    {
+
+      // Create starting area
+
+
+      //
+      new ScriptEntity(1, new Vector3(0, 0, -1), -1);
+      new ScriptEntity(2, new Vector3(0, 0, -3), -1);
+    }
+
+
   }
 
   //

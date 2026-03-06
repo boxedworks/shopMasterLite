@@ -1,6 +1,10 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 
+using System.Linq;
+
+using SimpleScript;
+
 namespace CustomUI
 {
   public class Terminal
@@ -43,9 +47,29 @@ namespace CustomUI
     }
 
     //
-    void HandleCommand(string command)
+    public static void HandleCommand(string command)
     {
-      LogMessage($"<color=red>Unknown command: {command}</color>");
+      command = command.Trim();
+      switch (command)
+      {
+        case "script new":
+
+          // Create new player entity
+          var playerEntity = new ScriptEntity(0, new Vector3(-6, 0, 0), 0);
+          playerEntity._EntityData.ItemStorage = Enumerable.Repeat<Item>(null, 4).ToList();
+          playerEntity._ScriptSpawned = false;
+
+          UIElements.s_Singleton._EditorPanel.SetNewScript(playerEntity);
+          break;
+
+        case "script run":
+
+          UIElements.s_Singleton._EditorPanel.RunNewScript();
+          break;
+        default:
+          s_Singleton.LogMessage($"<color=red>Unknown command: {command}</color>");
+          break;
+      }
     }
 
     // Log a message and render the terminal

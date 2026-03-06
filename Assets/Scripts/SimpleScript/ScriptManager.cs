@@ -90,7 +90,7 @@ namespace SimpleScript
       }
     }
     //
-    static void RemoveScript(ScriptBase script, string returnData = null)
+    public static void RemoveScript(ScriptBase script, string returnData = null)
     {
       RemoveScript(script._Id, returnData);
     }
@@ -871,8 +871,6 @@ namespace SimpleScript
             // Function
             case 1:
 
-              //Debug.Log($"Checking function {word}");
-
               accessorLastSave = accessorLast;
               accessorLast = "";
 
@@ -966,7 +964,7 @@ namespace SimpleScript
                 }
               }
 
-              //Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. {_breakLoop}");
+              //Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. returnStatement: {returnStatement} .. ctt: {currentTarget?._Type} .. paramCheck: {parameterCheck}");
 
               if (_breakLoop) break;
 
@@ -1006,7 +1004,7 @@ namespace SimpleScript
                 if (currentTarget != null)
                   logError($"Referencing non-existant function {currentTarget._Type}:{functionName})");
                 else
-                  logError($"Null-reference exception NULL:{functionName})");
+                  logError($"Null-reference exception NULL:{functionName}())");
                 break;
               }
 
@@ -1028,6 +1026,15 @@ namespace SimpleScript
                   break;
                 }
               }
+
+              // Check spawned
+              if (!_attachedEntity._ScriptSpawned)
+                if (!(isSystemFunction && functionName == "spawn"))
+                {
+                  logError($"Entity cannot perform actions before spawning");
+                  _attachedEntity.Destroy();
+                  break;
+                }
 
               // Entity function
               var serverAuthenticated = _OwnerId == -1;
@@ -1209,6 +1216,9 @@ namespace SimpleScript
 
                   if (parameterCheck)
                     returnStatement = returnData;
+
+                  if (IsValidVariableEntity(returnData))
+                    currentTarget = new ScriptTarget(GetEntityByStatement(returnData));
                 }
 
                 //
@@ -1678,6 +1688,39 @@ namespace SimpleScript
 
           //
           return SystemFunctionReturnData.Success(0);
+        }
+      );
+
+      // Spawn
+      RegisterSystemFunction(
+        "spawn",
+        (ScriptBase script, string accessor, string[] parameters) =>
+        {
+          // Validate accessor
+          if (accessor != "")
+          {
+            return SystemFunctionReturnData.InvalidFunction();
+          }
+
+          // Validate parameters
+          if (parameters.Length != 0)
+          {
+            return SystemFunctionReturnData.InvalidParameters(0);
+          }
+
+          // Teleport entity to position
+          var entity = script._AttachedEntity;
+          if (!entity.TryMove((0, 0, 0), true, false))
+          {
+            entity.Destroy();
+            Terminal.s_Singleton.LogMessage($"Failed to spawn entity because spawn location is occupied");
+            return SystemFunctionReturnData.Custom("Error spawning entity");
+          }
+
+          entity._ScriptSpawned = true;
+
+          //
+          return SystemFunctionReturnData.Success();
         }
       );
 

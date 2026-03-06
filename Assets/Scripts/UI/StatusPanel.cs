@@ -369,6 +369,7 @@ namespace CustomUI
           });
         return;
       }
+
       var script = _entity._AttachedScripts[0];
       string scriptStatus;
       if (script._IsValid)
@@ -381,6 +382,11 @@ namespace CustomUI
 <b>State: {scriptStatus}</b>";
 
       button.onClick.RemoveAllListeners();
+      if (_entity._IsPlayer)
+        button.onClick.AddListener(() =>
+        {
+          _entity.Destroy();
+        });
     }
 
     void ClosePanel(SubPanelType panelKey)

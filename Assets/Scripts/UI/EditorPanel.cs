@@ -1,31 +1,43 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+using System.Linq;
 
 using SimpleScript;
 namespace CustomUI
 {
-  class EditorPanel
+  public class EditorPanel
   {
 
     Transform _panel;
+    Transform _header { get { return _panel.GetChild(0); } }
+    Transform _taskbar { get { return _panel.GetChild(1); } }
+    Transform _body { get { return _panel.GetChild(2); } }
+
+    Button _buttonNew { get { return _taskbar.GetChild(0).GetComponent<Button>(); } }
+    Button _buttonRun { get { return _taskbar.GetChild(1).GetComponent<Button>(); } }
+
     TMPro.TextMeshProUGUI _lineNumberText;
     TMPro.TMP_InputField _displayText, _inputField;
 
     ScriptManager.ScriptBase _attachedScript;
-    ScriptEntity _attachedEntity { get { return _attachedScript != null ? _attachedScript._AttachedEntity : null; } }
+    ScriptEntity _attachedEntity;
 
     public bool _IsFocused { get { return EventSystem.current.currentSelectedGameObject == _inputField.gameObject; } }
 
     int _lineIndex;
     bool _hasError;
 
+    bool _isNewScript;
+
     public EditorPanel()
     {
       _panel = GameObject.Find("Editor").transform;
 
-      _displayText = _panel.GetChild(1).GetChild(0).GetChild(0).GetComponent<TMPro.TMP_InputField>();
-      _lineNumberText = _panel.GetChild(1).GetChild(0).GetChild(1).GetComponent<TMPro.TextMeshProUGUI>();
-      _inputField = _panel.GetChild(1).GetChild(0).GetChild(2).GetComponent<TMPro.TMP_InputField>();
+      _displayText = _body.GetChild(0).GetChild(0).GetComponent<TMPro.TMP_InputField>();
+      _lineNumberText = _body.GetChild(0).GetChild(1).GetComponent<TMPro.TextMeshProUGUI>();
+      _inputField = _body.GetChild(0).GetChild(2).GetComponent<TMPro.TMP_InputField>();
 
       _displayText.textComponent.textWrappingMode = _inputField.textComponent.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
 
@@ -35,6 +47,12 @@ namespace CustomUI
       {
         EventSystem.current.SetSelectedGameObject(_inputField.gameObject);
         _inputField.ActivateInputField();
+      });
+
+      SetButtonRunActive(true);
+      _buttonNew.onClick.AddListener(() =>
+      {
+        Terminal.HandleCommand("script new");
       });
     }
 
@@ -78,7 +96,7 @@ namespace CustomUI
       // Try to attach script if not attached to selected entity
       else
       {
-        var selectedEntity = PlayerController.s_Singleton._SelectedEntity;
+        var selectedEntity = _attachedEntity != null ? _attachedEntity : PlayerController.s_Singleton._SelectedEntity;
         if (selectedEntity != null)
         {
           if (selectedEntity._AttachedScripts != null)
@@ -88,6 +106,7 @@ namespace CustomUI
           }
         }
       }
+
     }
 
     void UpdateUI(string formatText = null)
@@ -112,16 +131,6 @@ namespace CustomUI
           lineNumberText_ = $"<color={lineNumberTextColor}>{lineNumberText_}</color>";
         }
         lineNumberText += $"{lineNumberText_}\n";
-
-        // var currentLine = lineSplit[i];
-        // if (currentLine.Length > lineWidth)
-        // {
-        //   var extraLines = currentLine.Length / lineWidth;
-        //   for (var j = 0; j < extraLines; j++)
-        //   {
-        //     lineNumberText += "\n";
-        //   }
-        // }
       }
       _lineNumberText.text = lineNumberText;
 
@@ -134,18 +143,82 @@ namespace CustomUI
       methodRegex = new System.Text.RegularExpressions.Regex(@"(?![if])(:\w+)|(\w+)(\()");
       formatText = methodRegex.Replace(formatText, $"<color={methodColor}>$1$2</color>$3");
 
+      var commentColor = "grey";
+      var commentRegex = new System.Text.RegularExpressions.Regex(@"(\s*(#|\/\/|\$).*)");
+      formatText = commentRegex.Replace(formatText, $"<color={commentColor}>$1</color>");
+
       _displayText.text = formatText;
     }
 
     //
     public void AttachScript(ScriptManager.ScriptBase script)
     {
+      OnAttachScript(script._AttachedEntity);
+
+      _isNewScript = false;
+
       _attachedScript = script;
+      _attachedEntity = script._AttachedEntity;
       _lineIndex = script._LineIndex;
       _hasError = _attachedScript._HasError;
 
       _inputField.text = script._CodeRaw;
       UpdateUI();
+    }
+
+    //
+    public void SetNewScript(ScriptEntity entity)
+    {
+      OnAttachScript(entity);
+
+      _isNewScript = true;
+
+      _attachedScript = null;
+      _attachedEntity = entity;
+      _lineIndex = 0;
+      _hasError = false;
+
+      _inputField.text = "";
+
+      UpdateUI();
+    }
+
+    //
+    public void RunNewScript()
+    {
+      if (_isNewScript)
+      {
+        _attachedEntity.LoadAndAttachRawScript(_inputField.text);
+
+        SetButtonRunActive(false);
+      }
+    }
+
+    //
+    void OnAttachScript(ScriptEntity newEntity)
+    {
+      if (_isNewScript)
+      {
+        if (newEntity._EntityData.Id == _attachedEntity._EntityData.Id)
+          return;
+        if (!_attachedEntity._ScriptSpawned)
+          _attachedEntity.Destroy();
+        _isNewScript = false;
+      }
+
+      // Set buttons
+      SetButtonRunActive(true);
+    }
+
+    //
+    void SetButtonRunActive(bool active)
+    {
+      _buttonRun.onClick.RemoveAllListeners();
+      if (active)
+        _buttonRun.onClick.AddListener(() =>
+        {
+          RunNewScript();
+        });
     }
 
   }
