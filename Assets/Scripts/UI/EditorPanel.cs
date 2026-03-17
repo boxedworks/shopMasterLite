@@ -136,8 +136,11 @@ namespace CustomUI
 
       // Try to format text
       var objectColor = "yellow";
-      var methodRegex = new System.Text.RegularExpressions.Regex(@"\b((var)|(if)|(else)|(end))\b");
+      var methodRegex = new System.Text.RegularExpressions.Regex(@"\b((var)|(if)|(else)|(end)|(while)|(for)|(continue)|(break))\b");
       formatText = methodRegex.Replace(formatText, $"<color={objectColor}>$1</color>");
+
+      methodRegex = new System.Text.RegularExpressions.Regex(@";");
+      formatText = methodRegex.Replace(formatText, $"<color={objectColor}>$0</color>");
 
       var methodColor = "green";
       methodRegex = new System.Text.RegularExpressions.Regex(@"(?![if])(:\w+)|(\w+)(\()");
@@ -188,7 +191,9 @@ namespace CustomUI
     {
       if (_isNewScript)
       {
-        _attachedEntity.LoadAndAttachRawScript(_inputField.text);
+        var newScript = _attachedEntity.LoadAndAttachRawScript(_inputField.text);
+        if (newScript == null)
+          return;
 
         SetButtonRunActive(false);
       }

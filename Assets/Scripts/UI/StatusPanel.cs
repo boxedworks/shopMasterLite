@@ -360,11 +360,14 @@ namespace CustomUI
         if (_entity._IsPlayer)
           button.onClick.AddListener(() =>
           {
-            _entity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
+            var newScript = _entity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
             {
               PathTo = "test",
               ScriptType = ScriptManager.ScriptType.PLAYER
             });
+            if (newScript == null)
+              return;
+
             UpdateScriptsPanel();
           });
         return;

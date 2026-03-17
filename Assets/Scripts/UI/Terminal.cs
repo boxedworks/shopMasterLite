@@ -55,7 +55,7 @@ namespace CustomUI
         case "script new":
 
           // Create new player entity
-          var playerEntity = new ScriptEntity(0, new Vector3(-6, 0, 0), 0);
+          var playerEntity = new ScriptEntity(0, new Vector3(-20, 0, 0), 0);
           playerEntity._EntityData.ItemStorage = Enumerable.Repeat<Item>(null, 4).ToList();
           playerEntity._ScriptSpawned = false;
 

@@ -85,7 +85,8 @@ namespace CustomUI
     // Keep panel from going off screen keeping into account recttransform pivot
     public void SmartSetPanelPosition(RectTransform panel, Vector3 position)
     {
-      var panelSize = panel.sizeDelta;
+      var screenScale = _UI.lossyScale;
+      var panelSize = panel.sizeDelta * screenScale;
       var panelPivot = panel.pivot;
       position.x = Mathf.Clamp(position.x, panelSize.x * panelPivot.x, Screen.width - panelSize.x * (1 - panelPivot.x));
       position.y = Mathf.Clamp(position.y, panelSize.y * panelPivot.y, Screen.height - panelSize.y * (1 - panelPivot.y));

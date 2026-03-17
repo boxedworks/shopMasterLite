@@ -9,6 +9,7 @@ using StringMath;
 using System;
 
 using CustomUI;
+using UnityEngine.XR;
 
 namespace SimpleScript
 {
@@ -214,8 +215,39 @@ namespace SimpleScript
 
       public int _LineIndex { get { return _lineIndex; } }
 
-      Dictionary<string, string> _variables;
+      Dictionary<string, Variable> _variables;
+      class Variable
+      {
+        public string _Value;
+        int _logicDepth;
 
+        public Variable(int logicDepth)
+        {
+          _logicDepth = logicDepth;
+        }
+
+        public bool IsInScope(int currentLogicDepth)
+        {
+          return currentLogicDepth >= _logicDepth;
+        }
+      }
+
+      // Loop
+      class LoopData
+      {
+        public enum LoopType
+        {
+          FOR,
+          WHILE
+        }
+        public LoopType _Type;
+        public int _LineIndexStart, _LogicDepth, _LoopCounter;
+        public bool _Break;
+      }
+      Stack<LoopData> _loopStack;
+      LoopData _lastLoop;
+
+      //
       string _externalReturnData;
       public string _ExternalReturnData { set { _externalReturnData = value; } get { return _externalReturnData; } }
       string _externalReturnStatement;
@@ -247,9 +279,9 @@ namespace SimpleScript
         _lineIndex = _lineDepth = _logicDepth = 0;
 
         // Add default variables
-        _variables = new Dictionary<string, string>
+        _variables = new Dictionary<string, Variable>
         {
-          { "this", GetEntityStatement(_attachedEntity) }
+          { "this", new Variable(_logicDepth) { _Value = GetEntityStatement(_attachedEntity) } }
         };
 
         //
@@ -322,130 +354,10 @@ namespace SimpleScript
           }
           _lineOriginal = _line;
 
-          // Check blank line
-          if (_line.Length == 0) continue;
           //Debug.Log("Read line: " + _line);
 
-          // Check comment
-          if (_line.StartsWith(@"//") || _line.StartsWith("#") || _line.StartsWith("$"))
-          {
-            continue;
-          }
-
-          // Check depth
-          if (_line == "end")
-          {
-
-            if (_logicDepth == 0 && _lineDepth == 0)
-            {
-              logError($"Unexpected 'end'");
-              return;
-            }
-
-            // Exit logic
-            if (_lineDepth == _logicDepth)
-              _logicDepth--;
-
-            _lineDepth--;
-            continue;
-          }
-
-          else if (_line == "else")
-          {
-
-            if (_lineDepth == 0)
-            {
-              logError($"Unexpected 'else'");
-              return;
-            }
-
-            // Enter else logic
-            if (_lineDepth == _logicDepth + 1)
-              _logicDepth++;
-
-            // Else acts as end
-            else if (_lineDepth == _logicDepth)
-              _logicDepth--;
-
-            continue;
-          }
-
-          if (_lineDepth != _logicDepth) continue;
-
           //
-          if (tokensAlloted-- == 0)
-          {
-            logError($"Logic tokens drained");
-            break;
-          }
-
-          // New variable assignment
-          if (_line.StartsWith("var ") && _line.Contains("="))
-          {
-            var lineSplit = _line.Split("=");
-            if (lineSplit.Length > 1)
-            {
-              var variable = lineSplit[0][4..].Trim();
-              if (_variables.ContainsKey(variable))
-              {
-                logError($"Variable '{variable}' already defined");
-                return;
-              }
-
-              var value = HandleStatement(lineSplit[1].Trim(), true);
-              if (_breakLoop) break;
-              _variables.Add(variable, value);
-              continue;
-            }
-            else
-            {
-              logError($"Invalid variable definition syntax");
-              return;
-            }
-          }
-
-          // Existing variable assignment
-          if (!_line.Contains("==") && _line.Contains("="))
-          {
-            var lineSplit = _line.Split("=");
-            if (lineSplit.Length > 1)
-            {
-              var variable = lineSplit[0].Trim();
-              if (!_variables.ContainsKey(variable))
-              {
-                logError($"Variable '{variable}' not defined");
-                return;
-
-              }
-
-              var value = HandleStatement(lineSplit[1].Trim(), true);
-              if (_breakLoop) break;
-              _variables[variable] = value;
-              continue;
-            }
-            else
-            {
-              logError($"Invalid variable assignment syntax");
-              return;
-            }
-          }
-
-          // Check for logic
-          if (_line.StartsWith("if"))
-          {
-
-            var lineLogic = _line[2..].Trim();
-            var logic = HandleLogic(lineLogic);
-            if (_breakLoop) break;
-
-            // If true, go inside of if statement +1 depth
-            _lineDepth++;
-            if (logic)
-              _logicDepth++;
-            continue;
-          }
-
-          HandleStatement(_line, false);
+          HandleLine(_line);
 
           //
           if (_breakLoop) break;
@@ -455,13 +367,328 @@ namespace SimpleScript
         _attachedEntity._TickCooldown = Mathf.Clamp(_attachedEntity._TickCooldown, _tickCooldown, 100);
       }
 
+      //
+      void HandleLine(string line)
+      {
+        //Debug.Log($"Handling line: {line}");
+
+        // Check blank line
+        if (line.Length == 0) return;
+
+        // Check comment
+        if (line.StartsWith(@"//") || line.StartsWith("#") || line.StartsWith("$"))
+        {
+          return;
+        }
+
+        // Check depth
+        if (line == "end")
+        {
+
+          if (_logicDepth == 0 && _lineDepth == 0)
+          {
+            logError($"Unexpected 'end'");
+            return;
+          }
+
+          // Exit logic
+          if (_lineDepth == _logicDepth)
+          {
+            _logicDepth--;
+            ScopeVariables();
+
+            // Check loop
+            if (_loopStack?.Count > 0)
+            {
+              var loop = _loopStack.Peek();
+              if (loop._LogicDepth == _logicDepth)
+              {
+                _lineIndex = loop._LineIndexStart - 1;
+
+                loop._LoopCounter++;
+                _lastLoop = loop;
+                _loopStack.Pop();
+
+                if (_loopStack.Count == 0)
+                  _loopStack = null;
+              }
+            }
+          }
+
+          _lineDepth--;
+          return;
+        }
+
+        if (line == "else")
+        {
+
+          if (_lineDepth == 0)
+          {
+            logError($"Unexpected 'else'");
+            return;
+          }
+
+          // Enter else logic
+          if (_lineDepth == _logicDepth + 1)
+            _logicDepth++;
+
+          // Else acts as end
+          else if (_lineDepth == _logicDepth)
+          {
+            _logicDepth--;
+            ScopeVariables();
+          }
+
+          return;
+        }
+
+        if (line == "continue")
+        {
+          if (_lineDepth == 0)
+          {
+            logError($"Unexpected 'continue'");
+            return;
+          }
+
+          // Exit logic
+          if (_lineDepth == _logicDepth)
+          {
+            if (_loopStack == null)
+            {
+              logError($"Unexpected 'continue'");
+              return;
+            }
+
+            var loop = _loopStack.Peek();
+            _lineIndex = loop._LineIndexStart - 1;
+            _logicDepth = _lineDepth = loop._LogicDepth;
+            ScopeVariables();
+
+            loop._LoopCounter++;
+            _lastLoop = loop;
+            _loopStack.Pop();
+
+            if (_loopStack.Count == 0)
+              _loopStack = null;
+          }
+
+          return;
+        }
+
+        if (line == "break")
+        {
+          if (_lineDepth == 0)
+          {
+            logError($"Unexpected 'break'");
+            return;
+          }
+
+          // Exit logic
+          if (_lineDepth == _logicDepth)
+          {
+            if (_loopStack == null)
+            {
+              logError($"Unexpected 'break'");
+              return;
+            }
+
+            var loop = _loopStack.Peek();
+            _lineIndex = loop._LineIndexStart - 1;
+            _logicDepth = _lineDepth = loop._LogicDepth;
+
+            loop._LoopCounter++;
+            loop._Break = true;
+            _lastLoop = loop;
+            _loopStack.Pop();
+
+            if (_loopStack.Count == 0)
+              _loopStack = null;
+          }
+
+          return;
+        }
+
+        // Check for logic
+        if (line.StartsWith("if"))
+        {
+
+          if (_lineDepth == _logicDepth)
+          {
+            var lineLogic = line[2..].Trim();
+            var logic = HandleLogic(lineLogic);
+            if (_breakLoop) return;
+
+            // If true, go inside of if statement +1 depth
+            if (logic)
+              _logicDepth++;
+          }
+          _lineDepth++;
+
+          return;
+        }
+
+        // Check for while loop
+        if (line.StartsWith("while"))
+        {
+          if (_lineDepth == _logicDepth)
+          {
+            var lastLoopSave = _lastLoop;
+            if (_lastLoop?._LineIndexStart == _lineIndex)
+            {
+              _lastLoop = null;
+            }
+
+            var loopBreak = lastLoopSave?._Break ?? false;
+
+            var lineLogic = line[5..].Trim();
+            var logic = !loopBreak && HandleLogic(lineLogic);
+            if (_breakLoop) return;
+
+            if (logic)
+            {
+              _loopStack ??= new();
+              _loopStack.Push(lastLoopSave ?? new LoopData()
+              {
+                _Type = LoopData.LoopType.WHILE,
+                _LineIndexStart = _lineIndex,
+                _LogicDepth = _logicDepth
+              });
+
+              _logicDepth++;
+            }
+          }
+          _lineDepth++;
+
+          return;
+        }
+
+        // Check for for loop
+        if (line.StartsWith("for"))
+        {
+          if (_lineDepth == _logicDepth)
+          {
+            LoopData lastLoopSave = _lastLoop;
+            if (_lastLoop?._LineIndexStart == _lineIndex)
+            {
+              _lastLoop = null;
+            }
+
+            var loopBreak = lastLoopSave?._Break ?? false;
+
+            int loopCounter = lastLoopSave?._LoopCounter ?? 0;
+
+            var forLoopData = line[3..].Trim();
+            if (forLoopData.StartsWith("(") && forLoopData.EndsWith(")"))
+              forLoopData = forLoopData[1..^1].Trim();
+
+            var forLoopParts = forLoopData.Split(";");
+            if (forLoopParts.Length != 3)
+            {
+              logError($"Invalid for loop syntax");
+              return;
+            }
+            var forLoopInit = forLoopParts[0].Trim();
+            var forLoopLogic = forLoopParts[1].Trim();
+            var forLoopIter = forLoopParts[2].Trim();
+
+            //Debug.Log($"Checking for loop: {line} .. {loopCounter} ({forLoopInit}; {forLoopLogic}; {forLoopIter})");
+
+            if (loopCounter == 0)
+            {
+              _lineDepth++;
+              _logicDepth++;
+              HandleLine(forLoopInit);
+            }
+            else if (!loopBreak)
+              HandleLine(forLoopIter);
+
+            var logic = !loopBreak && HandleLogic(forLoopLogic);
+            if (_breakLoop) return;
+
+            if (logic)
+            {
+              _loopStack ??= new();
+              _loopStack.Push(lastLoopSave ?? new LoopData()
+              {
+                _Type = LoopData.LoopType.FOR,
+                _LineIndexStart = _lineIndex,
+                _LogicDepth = _logicDepth
+              });
+
+              _logicDepth++;
+            }
+            else
+            {
+              _lineDepth--;
+              _logicDepth--;
+              ScopeVariables();
+            }
+          }
+          _lineDepth++;
+
+          return;
+        }
+
+        if (_lineDepth != _logicDepth) return;
+
+        //
+        // if (tokensAlloted-- == 0)
+        // {
+        //   logError($"Logic tokens drained");
+        //   break;
+        // }
+
+        // New variable assignment
+        if (line.StartsWith("var "))
+        {
+          if (line.Contains("="))
+          {
+            var lineSplit = line[4..].Split("=");
+            if (lineSplit.Length > 1)
+            {
+              var variable = lineSplit[0].Trim();
+              var value = string.Join("=", lineSplit[1..]).Trim();
+              SetVariable(variable, value, true);
+              return;
+            }
+          }
+          else
+          {
+            logError($"Invalid variable definition syntax");
+            return;
+          }
+        }
+
+        // Existing variable assignment
+        if (!line.Contains("==") && line.Contains("="))
+        {
+          var lineSplit = line.Split("=");
+          if (lineSplit.Length > 1)
+          {
+            var variable = lineSplit[0].Trim();
+            var value = string.Join("=", lineSplit[1..]).Trim();
+            SetVariable(variable, value, false);
+            return;
+          }
+          else
+          {
+            logError($"Invalid variable assignment syntax");
+            return;
+          }
+        }
+
+        // Else, handle statement normally
+        HandleStatement(line, false);
+      }
+
+      //
       string CheckSubstitueVariable(string accessor)
       {
         foreach (var pair in _variables)
         {
           if (accessor == pair.Key)
           {
-            var gotVariable = CheckSubstitueVariable(pair.Value);
+            var gotVariable = CheckSubstitueVariable(pair.Value._Value);
             //Debug.Log($"Substituted variable: {accessor} => {gotVariable}");
             return gotVariable;
           }
@@ -473,18 +700,34 @@ namespace SimpleScript
       string EvaluateParameter(string parameter)
       {
         //Debug.Log($"Evaluating parameter: {parameter}");
+
+        if (parameter.StartsWith("(") && parameter.EndsWith(")"))
+          parameter = parameter[1..^1];
+
+        if (parameter.Contains("++") || parameter.Contains("--"))
+          return HandleStatement(parameter, true);
+
         parameter = CheckSubstitueVariable(parameter);
-        if ((parameter.Contains("(") && parameter.Contains(")")) || parameter.Contains("."))
-        {
-          var parameterSave = parameter;
-          parameter = HandleStatement(parameter, true);
-          Debug.Log($"Evaluated param: {parameterSave} => {parameter}");
-        }
+
+        if ((parameter.Contains("(") && parameter.Contains(")")) || parameter.Contains(".") || parameter.Contains("++") || parameter.Contains("--"))
+          return HandleStatement(parameter, true);
+
         return parameter;
       }
 
+      //
+      bool GetLogicStatement(string val)
+      {
+        val = EvaluateParameter(val);
+        if (val == "true" || val == "1") return true;
+        if (val == "false" || val == "0") return false;
+
+        logError($"Invalid logic statement: {val}");
+        return false;
+      }
+
       // Evaluate one logical expression
-      bool GetLogic(string val0, string val1, string operator_)
+      bool GetLogicComparison(string val0, string val1, string operator_)
       {
 
         if (!s_conditionalOperators.Contains(operator_))
@@ -535,8 +778,15 @@ namespace SimpleScript
         /// Link type
         // 0 = AND
         // 1 = OR
-        // Loop through words, checking parenthesis
         var logicSplit = lineLogic.Split(" ");
+
+        // Check single logic
+        if (logicSplit.Length == 1)
+        {
+          return GetLogicStatement(logicSplit[0]);
+        }
+
+        // Loop through words, checking parenthesis
         var logicDepth = 0;
         var lastLogicDepth = -1;
         var logicType = -1;
@@ -581,7 +831,7 @@ namespace SimpleScript
           }
 
           // Evaluate
-          var evaluate = GetLogic(logicVal0, logicVal1, logicOperator);
+          var evaluate = GetLogicComparison(logicVal0, logicVal1, logicOperator);
           if (_breakLoop) break;
 
           // Base master value
@@ -665,10 +915,76 @@ namespace SimpleScript
         return masterLogic;
       }
 
+      void SetVariable(string variable, string value, bool newAssignment)
+      {
+        if (_variables.ContainsKey(variable))
+        {
+          if (newAssignment)
+          {
+            logError($"Variable '{variable}' already defined");
+            return;
+          }
+        }
+        else
+        {
+          if (!newAssignment)
+          {
+            logError($"Variable '{variable}' not defined");
+            return;
+          }
+        }
+
+        value = EvaluateArithmetic(value);
+        if (_breakLoop) return;
+        if (newAssignment)
+          _variables.Add(variable, new Variable(_logicDepth) { _Value = value });
+        else
+          _variables[variable]._Value = value;
+        return;
+      }
+
       string HandleStatement(string statement, bool parameterCheck)
       {
-        // Split statement into traversable list marked as accessor or function; substitute variables
         //Debug.Log($"Handling statement: {statement} (Param check: {parameterCheck})");
+
+        // Check increment/decrement
+        if (statement.Length > 2)
+        {
+          if (statement.StartsWith("++") || statement.EndsWith("++"))
+          {
+            var variable = statement.StartsWith("++") ? statement[2..].Trim() : statement[..^2].Trim();
+            var value = EvaluateParameter(variable);
+            if (int.TryParse(value, out int intValue))
+            {
+              intValue++;
+              SetVariable(variable, intValue.ToString(), false);
+              return (statement.StartsWith("++") ? intValue : intValue - 1).ToString();
+            }
+            else
+            {
+              logError($"Invalid increment operator usage on non-integer variable '{variable}'");
+              return null;
+            }
+          }
+          else if (statement.StartsWith("--") || statement.EndsWith("--"))
+          {
+            var variable = statement.StartsWith("--") ? statement[2..].Trim() : statement[..^2].Trim();
+            var value = EvaluateParameter(variable);
+            if (int.TryParse(value, out int intValue))
+            {
+              intValue--;
+              SetVariable(variable, intValue.ToString(), false);
+              return (statement.StartsWith("--") ? intValue : intValue + 1).ToString();
+            }
+            else
+            {
+              logError($"Invalid decrement operator usage on non-integer variable '{variable}'");
+              return null;
+            }
+          }
+        }
+
+        // Split statement into traversable list marked as accessor or function; substitute variables
         List<(string, int)> statementData = new();
         var returnStatement = "";
 
@@ -676,7 +992,6 @@ namespace SimpleScript
         var currentWord = "";
         var wordType = -1;
         var functionCounter = 0;
-        //Debug.Log($"Handling statement: {statement}");
         for (var i = 0; i < statement.Length; i++)
         {
           var letter = statement[i];
@@ -927,41 +1242,9 @@ namespace SimpleScript
                     functionParameters.Add(parameterGot);
                 }
 
-                /// TODO fix this....
-                string EvalutateP(string p)
-                {
-                  // Check for logic in parameter; if logic exists, evaluate and return result as boolean string
-                  if (s_conditionalOperators.Any(op => p.Contains(op)))
-                  {
-                    return HandleLogic(p) ? "true" : "false";
-                  }
-
-                  // Else, just evaluate parameter normally
-                  return HandleStatement(p.Trim(), true);
-                }
-
                 //
                 for (var u = 0; u < functionParameters.Count; u++)
-                {
-
-                  // Arithmetic
-                  var evaluated = false;
-                  foreach (var arithmeticOp in new char[] { '+', '-', '*', '/' })
-                    if (functionParameters[u].Contains(arithmeticOp))
-                    {
-                      evaluated = true;
-
-                      var statementSplit = functionParameters[u].Split(arithmeticOp);
-
-                      for (var y = 0; y < statementSplit.Length; y++)
-                        statementSplit[y] = EvalutateP(statementSplit[y]);
-                      functionParameters[u] = ((float)string.Join(arithmeticOp, statementSplit).Eval()) + "";
-                    }
-
-                  // No arthimetic
-                  if (!evaluated)
-                    functionParameters[u] = EvalutateP(functionParameters[u]);
-                }
+                  functionParameters[u] = EvaluateArithmetic(functionParameters[u]);
               }
 
               //Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. returnStatement: {returnStatement} .. ctt: {currentTarget?._Type} .. paramCheck: {parameterCheck}");
@@ -1089,13 +1372,13 @@ namespace SimpleScript
                   ScriptType = ScriptType.ENTITY
                 });
                 entityScript._parentScript = this;
-                entityScript._variables.Add("_entity", GetEntityStatement(_attachedEntity));
+                entityScript._variables.Add("_entity", new Variable(_logicDepth) { _Value = GetEntityStatement(_attachedEntity) });
 
                 // Add script parameters
                 for (var u = 0; u < functionParameters.Count; u++)
                 {
                   var newParameter = functionParameters[u];
-                  entityScript._variables.Add($"_param{u}", newParameter);
+                  entityScript._variables.Add($"_param{u}", new Variable(_logicDepth) { _Value = newParameter });
                 }
 
                 // Check for return statement
@@ -1137,7 +1420,7 @@ namespace SimpleScript
                 for (var u = 0; u < functionParameters.Count; u++)
                 {
                   var newParameter = functionParameters[u];
-                  itemScript._variables.Add($"_param{u}", newParameter);
+                  itemScript._variables.Add($"_param{u}", new Variable(_logicDepth) { _Value = newParameter });
                 }
 
                 // Check for return statement
@@ -1236,6 +1519,57 @@ namespace SimpleScript
         }
 
         return returnStatement;
+      }
+
+      //
+      string EvaluateArithmetic(string statement)
+      {
+        string EvalutateP(string p)
+        {
+          // Check for logic in parameter; if logic exists, evaluate and return result as boolean string
+          p = p.Trim();
+          if (s_conditionalOperators.Any(op => p.Contains(op)))
+          {
+            return HandleLogic(p) ? "true" : "false";
+          }
+
+          // Else, just evaluate parameter normally
+          return HandleStatement(p, true);
+        }
+
+        var evaluated = false;
+        foreach (var arithmeticOp in new char[] { '+', '-', '*', '/' })
+          if (statement.Contains(arithmeticOp))
+          {
+            evaluated = true;
+
+            var statementSplit = statement.Split(arithmeticOp);
+
+            for (var y = 0; y < statementSplit.Length; y++)
+              statementSplit[y] = EvalutateP(statementSplit[y]);
+            statement = string.Join(arithmeticOp, statementSplit);
+          }
+        if (evaluated)
+          statement = $"{(float)statement.Eval()}";
+
+        // No arthimetic
+        else
+          statement = EvalutateP(statement);
+
+        return statement;
+      }
+
+      // Remove out of scope variables based on logic depth
+      void ScopeVariables()
+      {
+        _variables
+          .Where(pair => !pair.Value.IsInScope(_logicDepth))
+          .ToList()
+          .ForEach(pair =>
+          {
+            _variables.Remove(pair.Key);
+            //Debug.Log($"Removed variable {pair.Key} due to logic depth");
+          });
       }
 
       // Log error

@@ -17,11 +17,11 @@ namespace SimpleScript
 
     //
     [System.Serializable]
-    struct EntityTypeDataWrapper
+    struct ItemTypeDataWrapper
     {
       public List<Item.ItemTypeData> _ItemTypeData;
     }
-    EntityTypeDataWrapper _itemDataWrapper;
+    ItemTypeDataWrapper _itemDataWrapper;
     static List<Item.ItemTypeData> s_itemTypeData
     {
       get
@@ -92,7 +92,7 @@ namespace SimpleScript
 
       // Load in item type data
       var rawText = System.IO.File.ReadAllText("itemTypeData.json");
-      var jsonData = JsonUtility.FromJson<EntityTypeDataWrapper>(rawText);
+      var jsonData = JsonUtility.FromJson<ItemTypeDataWrapper>(rawText);
       _itemDataWrapper = jsonData;
 
       // Match functions per item type

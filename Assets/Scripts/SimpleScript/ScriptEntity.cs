@@ -804,6 +804,10 @@ namespace SimpleScript
         rawScript,
         _EntityData.OwnerId
       );
+      if (newScript == null)
+      {
+        return null;
+      }
 
       if (_attachedScripts == null)
       {
