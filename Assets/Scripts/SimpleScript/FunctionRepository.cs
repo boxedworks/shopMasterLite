@@ -9,7 +9,7 @@ namespace SimpleScript
 
     // Holds all function data
     [System.Serializable]
-    public struct FunctionData
+    public class FunctionData
     {
       public int Id;
 
@@ -56,7 +56,7 @@ namespace SimpleScript
 
         // Add function data
         Debug.Log($"Loaded script [Entity script = {isEntityScripts}] {fileName} with {numParams} params");
-        AddFunction(functionName, "System loaded...", numParams);
+        AddFunction(fileName, "System loaded...", numParams);
         if (!functionsByType.ContainsKey(objectName))
           functionsByType.Add(objectName, new());
         functionsByType[objectName].Add(functionName);
@@ -83,6 +83,11 @@ namespace SimpleScript
     //
     public int GetFunctionId(string functionName)
     {
+      if (!_functionData.ContainsKey(functionName))
+      {
+        Debug.LogWarning($"No function found with name {functionName}");
+        return -1;
+      }
       return _functionData[functionName].Id;
     }
     public string GetFunctionName(int functionId)
@@ -92,6 +97,11 @@ namespace SimpleScript
 
     public FunctionData GetFunctionData(string functionName)
     {
+      if (!_functionData.ContainsKey(functionName))
+      {
+        Debug.LogWarning($"No function found with name {functionName}");
+        return null;
+      }
       return _functionData[functionName];
     }
     public FunctionData GetFunctionData(int functionId)

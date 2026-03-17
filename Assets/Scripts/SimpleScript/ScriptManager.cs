@@ -29,7 +29,7 @@ namespace SimpleScript
     {
       s_Singleton = new ScriptManager();
 
-      ScriptEntity.ScriptEntityHelper.Init();
+      ScriptEntityHelper.Init();
       s_Singleton.InitializeSystemFunctions();
     }
 
@@ -50,7 +50,7 @@ namespace SimpleScript
 
       public string Headers;
     }
-    public ScriptBase AttachScriptTo(ScriptEntity entity, string scriptRaw, int ownerId)
+    public ScriptBase AttachScriptRawTo(ScriptEntity entity, string scriptRaw, int ownerId)
     {
       // Check empty script
       if (scriptRaw.Trim().Length == 0)
@@ -251,7 +251,7 @@ namespace SimpleScript
       string _externalReturnData;
       public string _ExternalReturnData { set { _externalReturnData = value; } get { return _externalReturnData; } }
       string _externalReturnStatement;
-      string _externalLine;
+      string _externalReturnLine;
 
       ScriptEntity _attachedEntity;
       public ScriptEntity _AttachedEntity { get { return _attachedEntity; } }
@@ -259,10 +259,14 @@ namespace SimpleScript
       ScriptBase _parentScript;
       public ScriptBase _ParentScript { get { return _parentScript; } }
 
+      int _entityFunctionId;
+      FunctionRepository.FunctionData _functionData { get { return _entityFunctionId == -1 ? null : ScriptEntityHelper.s_FunctionRepository.GetFunctionData(_entityFunctionId); } }
+
       public ScriptBase(ScriptEntity entity, string codeRaw)
       {
         _attachedEntity = entity;
         _codeRaw = codeRaw;
+        _entityFunctionId = -1;
 
         // Split raw into lines
         _lines = _codeRaw.Split("\n");
@@ -285,7 +289,7 @@ namespace SimpleScript
         };
 
         //
-        _externalReturnData = _externalReturnStatement = _externalLine = null;
+        _externalReturnData = _externalReturnStatement = _externalReturnLine = null;
       }
 
       // Parse simplescript
@@ -324,14 +328,15 @@ namespace SimpleScript
           }
 
           // Check external return statement
+          var handledExternalReturn = false;
           if (_externalReturnData != null)
           {
-            //Debug.Log($"External return data found.. replacing: {_externalReturnData} [{_externalReturnStatement}] ........... {line}");
+            Debug.Log($"External return data found.. replacing: {_externalReturnData} [{_externalReturnStatement}] ........... {_line}");
 
             // Check error
-            if (_ExternalReturnData.StartsWith("!E"))
+            if (_externalReturnData.StartsWith("!E"))
             {
-              var error = _ExternalReturnData[2..].Trim();
+              var error = _externalReturnData[2..].Trim();
               logError(error);
               break;
             }
@@ -339,22 +344,24 @@ namespace SimpleScript
             // Substitute return data into statement
             if (_externalReturnStatement != null)
             {
-              int statementPos = _externalLine.IndexOf(_externalReturnStatement);
-              _line = _externalLine.Remove(statementPos, _externalReturnStatement.Length).Insert(statementPos, _externalReturnData);
+              int statementPos = _externalReturnLine.IndexOf(_externalReturnStatement);
+              _line = _externalReturnLine.Remove(statementPos, _externalReturnStatement.Length).Insert(statementPos, _externalReturnData);
+              Debug.Log($"Replaced: {_line}");
+
+              handledExternalReturn = true;
             }
 
             // Clear external return data
-            _externalReturnData = _externalReturnStatement = _externalLine = null;
+            _externalReturnData = _externalReturnStatement = _externalReturnLine = null;
           }
 
           // Gather line normally
-          else
+          if (!handledExternalReturn)
           {
             _line = _lines[_lineIndex++].Trim();
           }
           _lineOriginal = _line;
 
-          //Debug.Log("Read line: " + _line);
 
           //
           HandleLine(_line);
@@ -370,10 +377,10 @@ namespace SimpleScript
       //
       void HandleLine(string line)
       {
-        //Debug.Log($"Handling line: {line}");
-
         // Check blank line
         if (line.Length == 0) return;
+
+        //Debug.Log($"Handling line: {line}");
 
         // Check comment
         if (line.StartsWith(@"//") || line.StartsWith("#") || line.StartsWith("$"))
@@ -1101,7 +1108,7 @@ namespace SimpleScript
                 }
 
                 // Check string
-                if (IsStringParameter(word))
+                if (IsStringVariable(word))
                 {
                   if (parameterCheck)
                     returnStatement = word;
@@ -1186,6 +1193,8 @@ namespace SimpleScript
             // Function
             case 1:
 
+              //Debug.Log($"Checking function {word}");
+
               accessorLastSave = accessorLast;
               accessorLast = "";
 
@@ -1216,6 +1225,7 @@ namespace SimpleScript
                   for (var u = 0; u < parameters.Length; u++)
                   {
                     var nextChar = parameters[u];
+                    if (nextChar == ' ') continue;
 
                     // Check depth
                     if (nextChar == '(' || nextChar == '[')
@@ -1263,7 +1273,7 @@ namespace SimpleScript
                 switch (currentTarget._TargetType)
                 {
                   case ScriptTarget.TargetType.SCRIPT_ENTITY:
-                    isEntityFunction = isValidFunction = ScriptEntity.ScriptEntityHelper.HasFunction(currentTarget._ScriptEntity, functionName);
+                    isEntityFunction = isValidFunction = ScriptEntityHelper.HasFunction(currentTarget._ScriptEntity, functionName);
                     break;
                   case ScriptTarget.TargetType.ITEM:
                     isItemFunction = isValidFunction = ItemManager.HasFunction(currentTarget._Item, functionName);
@@ -1295,8 +1305,8 @@ namespace SimpleScript
               if (isEntityFunction || isItemFunction)
               {
                 var numValidParameters = isEntityFunction ?
-                  ScriptEntity.ScriptEntityHelper.s_FunctionRepository.GetFunctionParameterCount(functionName) :
-                  ItemManager.s_FunctionRepository.GetFunctionParameterCount(functionName);
+                  ScriptEntityHelper.GetFunctionParameterCount(currentTarget._ScriptEntity, functionName) :
+                  ItemManager.GetFunctionParameterCount(currentTarget._Item, functionName);
 
                 if (numValidParameters == -1)
                 {
@@ -1312,7 +1322,7 @@ namespace SimpleScript
 
               // Check spawned
               if (!_attachedEntity._ScriptSpawned)
-                if (!(isSystemFunction && functionName == "spawn"))
+                if (!(isSystemFunction && (functionName == "spawn" || functionName == "exit" || functionName == "setSprite")))
                 {
                   logError($"Entity cannot perform actions before spawning");
                   _attachedEntity.Destroy();
@@ -1385,7 +1395,7 @@ namespace SimpleScript
                 if (parameterCheck)
                 {
                   _externalReturnStatement = statement;
-                  _externalLine = _line;
+                  _externalReturnLine = _line;
 
                   // Keep line index the same to re-fire function until it returns data
                   _lineIndex--;
@@ -1427,7 +1437,7 @@ namespace SimpleScript
                 if (parameterCheck)
                 {
                   _externalReturnStatement = statement;
-                  _externalLine = _line;
+                  _externalReturnLine = _line;
 
                   // Keep line index the same to re-fire function until it returns data
                   _lineIndex--;
@@ -1524,6 +1534,8 @@ namespace SimpleScript
       //
       string EvaluateArithmetic(string statement)
       {
+        //Debug.Log($"Evaluating arithmetic: {statement}");
+
         string EvalutateP(string p)
         {
           // Check for logic in parameter; if logic exists, evaluate and return result as boolean string
@@ -1538,17 +1550,24 @@ namespace SimpleScript
         }
 
         var evaluated = false;
-        foreach (var arithmeticOp in new char[] { '+', '-', '*', '/' })
-          if (statement.Contains(arithmeticOp))
-          {
-            evaluated = true;
 
-            var statementSplit = statement.Split(arithmeticOp);
+        if (!statement.Contains("\""))
+        {
+          foreach (var arithmeticOp in new char[] { '-', '+', '*', '/' })
+            if (statement.Contains(arithmeticOp))
+            {
+              evaluated = true;
 
-            for (var y = 0; y < statementSplit.Length; y++)
-              statementSplit[y] = EvalutateP(statementSplit[y]);
-            statement = string.Join(arithmeticOp, statementSplit);
-          }
+              var statementSplit = statement.Split(arithmeticOp);
+
+              var ss = statement;
+              for (var y = 0; y < statementSplit.Length; y++)
+                statementSplit[y] = EvalutateP(statementSplit[y]);
+              statement = string.Join(arithmeticOp, statementSplit);
+
+              //Debug.Log($"Evaluated arithmetic [{arithmeticOp}]: {ss} => {statement}");
+            }
+        }
         if (evaluated)
           statement = $"{(float)statement.Eval()}";
 
@@ -1713,8 +1732,8 @@ namespace SimpleScript
           }
 
           // Check return statement
-          var returnData = parameters.Length == 1 ? parameters[0] : null;
-          Debug.Log($"Script exit called with return data: {returnData}");
+          var returnData = parameters.Length == 1 ? parameters[0] : "null";
+          Debug.Log($"exit() called with return data: {returnData}");
 
           // Remove script
           RemoveScript(script, returnData);
@@ -2058,6 +2077,42 @@ namespace SimpleScript
         }
       );
 
+      // Set sprite
+      RegisterSystemFunction(
+        "setSprite",
+        (ScriptBase script, string accessor, string[] parameters) =>
+        {
+          // Validate accessor
+          if (accessor != "_")
+          {
+            return SystemFunctionReturnData.InvalidFunction();
+          }
+
+          // Validate parameters
+          if (parameters.Length != 2)
+          {
+            return SystemFunctionReturnData.InvalidParameters(2);
+          }
+
+          // Get entity by id
+          var entityData = parameters[0];
+          var entity = GetEntityByIdOrStatement(entityData);
+          if (entity == null)
+          {
+            return SystemFunctionReturnData.NullReference();
+          }
+
+          // Get sprite path
+          var spritePath = GetStringFromParameter(parameters[1]);
+
+          // Set sprite
+          entity.SetSprite(spritePath);
+
+          //
+          return SystemFunctionReturnData.Success(0);
+        }
+      );
+
       // Shake entity
       RegisterSystemFunction(
         "animate",
@@ -2172,7 +2227,7 @@ namespace SimpleScript
           var volume = float.Parse(parameters[3]);
 
           // Play sfx
-          SfxController.PlaySfxAt(entity._Transform.position, sfxFolderName, sfxName, volume);
+          SfxController.PlaySfxAt(entity._TilePositionVector3, sfxFolderName, sfxName, volume);
 
           //
           return SystemFunctionReturnData.Success(0);
@@ -2244,9 +2299,9 @@ namespace SimpleScript
       return $"$Item[{item._ItemData.Id}]";
     }
 
-    static bool IsStringParameter(string param)
+    static bool IsStringVariable(string variable)
     {
-      return param.StartsWith("\"") && param.EndsWith("\"");
+      return variable.StartsWith("\"") && variable.EndsWith("\"");
     }
     static string GetStringFromParameter(string param)
     {

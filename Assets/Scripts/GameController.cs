@@ -19,9 +19,10 @@ public class GameController : MonoBehaviour
     // Initizalize other systems
     new Terminal();
 
-    ScriptEntity.ScriptEntityHelper.SaveTypeData();
+    ScriptEntityHelper.SaveTypeData();
 
     _lastTick = Time.time;
+    s_CurrentTick = 1;
 
     //
     LoadGame();

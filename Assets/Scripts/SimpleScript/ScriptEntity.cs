@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 using CustomUI;
-using System.Linq;
+using NUnit.Framework;
 
 namespace SimpleScript
 {
@@ -24,6 +24,7 @@ namespace SimpleScript
     public EntityTypeData _EntityTypeData { get { return ScriptEntityHelper.GetEntityTypeData(this); } }
     public int _EntityType { get { return _EntityTypeData.Id; } }
     public (int x, int y, int z) _TilePosition { get { return (_EntityData.X, _EntityData.Y, _EntityData.Z); } }
+    public Vector3 _TilePositionVector3 { get { return new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z); } }
     public int _Direction { get { return _EntityData.Direction; } }
     public bool _IsPlayer { get { return _EntityData.OwnerId == 0; } }
     public List<Item> _Storage { get { return _EntityData.ItemStorage; } }
@@ -31,9 +32,6 @@ namespace SimpleScript
     public bool _HasLog { get { return (_EntityData.Log?.Count ?? 0) > 0; } }
     bool _spawned, _scriptSpawned;
     public bool _ScriptSpawned { get { return _scriptSpawned; } set { _scriptSpawned = value; } }
-
-    Transform transform;
-    public Transform _Transform { get { return transform; } }
 
     // VFX
     Transform _billboard;
@@ -123,8 +121,26 @@ namespace SimpleScript
       }
       InitializeEntityVariables();
 
-      // Load model from entity type
-      LoadModel();
+      // Set up model
+      SetupModel();
+
+      // Check spawn script
+      if (ScriptEntityHelper.HasFunction(this, "spawn"))
+      {
+        LoadAndAttachScript(new ScriptManager.ScriptLoadData()
+        {
+          ScriptType = ScriptManager.ScriptType.ENTITY,
+          PathTo = $"{_EntityTypeData.Name.ToLower()}.spawn"
+        })
+
+        // Tick spawn script immediately
+        .Tick();
+      }
+      else
+      {
+        var modelName = _EntityTypeData.Name;
+        SetSprite($"entities/{modelName}");
+      }
 
       // Set position
       TryMove(_TilePosition, false, false);
@@ -144,8 +160,8 @@ namespace SimpleScript
       AddScriptEntity(this);
       InitializeEntityVariables();
 
-      // Load model from entity type
-      LoadModel();
+      // Set up model
+      SetupModel();
 
       // Set position
       TryMove(_TilePosition, false, false);
@@ -169,7 +185,6 @@ namespace SimpleScript
           if (script._IsValid)
             ScriptManager.RemoveScript(script);
 
-      Object.Destroy(transform.gameObject);
       Object.Destroy(_billboard.gameObject);
     }
     public static void DestroyEntity(ScriptEntity entity)
@@ -293,25 +308,24 @@ namespace SimpleScript
     }
 
     // Load model from entity type
-    void LoadModel()
+    void SetupModel()
     {
-      var modelName = _EntityTypeData.Name;
-
-      var displayModel = new GameObject
-      {
-        name = modelName
-      };
-      transform = displayModel.transform;
-
       _billboard = new GameObject().transform;
       var sprite = new GameObject();
       sprite.transform.parent = _billboard;
 
-      var spriteRenderer = sprite.AddComponent<SpriteRenderer>();
-      spriteRenderer.sprite = Resources.Load<Sprite>($"Images/Entities/{modelName}");
+#if UNITY_EDITOR
+      _billboard.name = $"{_EntityTypeData.Name}[{_EntityData.Id}]";
+      sprite.name = "Sprite";
+#endif
 
-      // Set initial position
-      transform.position = new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z);
+      sprite.AddComponent<SpriteRenderer>();
+    }
+
+    public void SetSprite(string spritePath)
+    {
+      var spriteRenderer = _sprite.GetComponent<SpriteRenderer>();
+      spriteRenderer.sprite = Resources.Load<Sprite>($"Images/{spritePath}");
     }
 
     //
@@ -352,11 +366,11 @@ namespace SimpleScript
         switch (animationType)
         {
           case AnimationType.Move:
-            SfxController.PlaySfxAt(entity.transform.position, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Move, 0.13f);
+            SfxController.PlaySfxAt(entity._TilePositionVector3, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Move, 0.13f);
             break;
 
           case AnimationType.Jump:
-            SfxController.PlaySfxAt(entity.transform.position, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump, 0.3f);
+            SfxController.PlaySfxAt(entity._TilePositionVector3, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump, 0.3f);
             break;
         }
       }
@@ -375,7 +389,7 @@ namespace SimpleScript
         var isAnimationComplete = _animationTime > _animationDuration;
 
         var animationTimeNormalized = _animationTime / _animationDuration;
-        var endPos = _entity.transform.position;
+        var endPos = _entity._TilePositionVector3;
 
         // Apply animation effect based on type
         if (isAnimationComplete)
@@ -411,7 +425,7 @@ namespace SimpleScript
       //
       public void OnAnimatedRemoved()
       {
-        var endPos = _entity.transform.position;
+        var endPos = _entity._TilePositionVector3;
 
         switch (_animationType)
         {
@@ -430,7 +444,7 @@ namespace SimpleScript
         switch (_animationType)
         {
           case AnimationType.Jump:
-            SfxController.PlaySfxAt(_entity.transform.position, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump_Land, 0.2f);
+            SfxController.PlaySfxAt(_entity._TilePositionVector3, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump_Land, 0.2f);
             break;
         }
       }
@@ -540,116 +554,6 @@ namespace SimpleScript
     }
 
     //
-    [System.Serializable]
-    public struct EntityTypeData
-    {
-
-      public int Id;
-
-      // Name of type; ex: Wood
-      public string Name;
-
-      // Flavor text for user
-      public string Description;
-
-      // Whether other entities can share the tile; ex: ground items
-      public bool Solid;
-
-      // 'Radius' of the object; default 1, adding 1 will expand the outer ring of tiles
-      public int Size;
-
-      // Public functions are how entities can interact with other entities
-      [System.NonSerialized]
-      public int[] PublicFunctionIds;
-    }
-
-    public static class ScriptEntityHelper
-    {
-
-      static List<EntityTypeData> s_entityTypeData
-      {
-        get
-        {
-          return s_entityDataWrapper._EntityTypeData;
-        }
-      }
-      [System.Serializable]
-      struct EntityTypeDataWrapper
-      {
-        public List<EntityTypeData> _EntityTypeData;
-      }
-      static EntityTypeDataWrapper s_entityDataWrapper;
-
-
-      //
-      public static FunctionRepository s_FunctionRepository;
-
-      //
-      public static void Init()
-      {
-        s_ScriptEntities = new();
-        s_ScriptEntitiesMapped = new();
-
-        s_FunctionRepository = new();
-
-        LoadTypeData();
-      }
-
-      // Load objects from json
-      public static void LoadTypeData()
-      {
-        var functionsByType = s_FunctionRepository.Load(true);
-
-        // Load in entity type data
-        var rawText = System.IO.File.ReadAllText("entityTypeData.json");
-        var jsonData = JsonUtility.FromJson<EntityTypeDataWrapper>(rawText);
-        s_entityDataWrapper = jsonData;
-
-        // Match functions per entity type
-        for (var i = 0; i < s_entityTypeData.Count; i++)
-        {
-          var entityTypeData = s_entityTypeData[i];
-          var functionIds = new List<int>();
-          if (functionsByType.ContainsKey(entityTypeData.Name.ToLower()))
-            foreach (var func in functionsByType[entityTypeData.Name.ToLower()])
-            {
-              var id = s_FunctionRepository.GetFunctionId(func);
-              functionIds.Add(id);
-            }
-          var publicFunctionIds = functionIds.ToArray();
-          entityTypeData.PublicFunctionIds = publicFunctionIds;
-          s_entityTypeData[i] = entityTypeData;
-        }
-      }
-
-      // Save objects to json
-      public static void SaveTypeData()
-      {
-        var jsonData = JsonUtility.ToJson(s_entityDataWrapper, true);
-        System.IO.File.WriteAllText("entityTypeData.json", jsonData);
-      }
-
-      //
-      public static EntityTypeData GetEntityTypeData(int id)
-      {
-        return s_entityTypeData[id];
-      }
-      public static EntityTypeData GetEntityTypeData(ScriptEntity entity)
-      {
-        return GetEntityTypeData(entity._EntityData.TypeId);
-      }
-
-      //
-      public static bool HasFunction(ScriptEntity entity, string functionName)
-      {
-        var functionId = s_FunctionRepository.GetFunctionId(functionName);
-        var typeData = entity._EntityTypeData;
-        var functions = typeData.PublicFunctionIds;
-        return functions.Contains(functionId);
-      }
-    }
-
-    //
     public bool HasEntityVariable_Int(string variableName)
     {
       return _entityVariableMappings.ContainsKey(variableName);
@@ -746,14 +650,11 @@ namespace SimpleScript
       SetEntityVariable_Int("y", _EntityData.Y);
       SetEntityVariable_Int("z", _EntityData.Z);
 
-      // Set local model to network position
-      transform.position = new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z);
-
       // Animate
       if (animate)
         SetAnimation(Animation.AnimationType.Move, _TICKS_PER_MOVEMENT);
       else
-        _billboard.position = transform.position;
+        _billboard.position = _TilePositionVector3;
 
       return true;
     }
@@ -762,25 +663,6 @@ namespace SimpleScript
     public bool TrySetDirection(int direction)
     {
       _EntityData.Direction = direction;
-
-      switch (direction)
-      {
-        case 0:
-          transform.rotation = Quaternion.Euler(0, 0, 0);
-          break;
-
-        case 1:
-          transform.rotation = Quaternion.Euler(0, 180, 0);
-          break;
-
-        case 2:
-          transform.rotation = Quaternion.Euler(0, -90, 0);
-          break;
-
-        case 3:
-          transform.rotation = Quaternion.Euler(0, 90, 0);
-          break;
-      }
 
       return true;
     }
@@ -799,7 +681,7 @@ namespace SimpleScript
     // Load and attach script to entity
     public ScriptManager.ScriptBase LoadAndAttachRawScript(string rawScript)
     {
-      var newScript = ScriptManager.s_Singleton.AttachScriptTo(
+      var newScript = ScriptManager.s_Singleton.AttachScriptRawTo(
         this,
         rawScript,
         _EntityData.OwnerId

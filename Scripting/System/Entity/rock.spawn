@@ -1,0 +1,3 @@
+_:setSprite(this, "entities/rock")
+
+exit()

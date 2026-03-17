@@ -122,10 +122,19 @@ namespace SimpleScript
     //
     public static bool HasFunction(Item item, string functionName)
     {
-      var functionId = s_FunctionRepository.GetFunctionId(functionName);
+      var itemKey = item._ItemTypeData.Name.ToLower();
+      var functionId = s_FunctionRepository.GetFunctionId($"{itemKey}.{functionName}");
       var typeData = item._ItemTypeData;
       var functions = typeData.PublicFunctionIds;
       return functions.Contains(functionId);
+    }
+
+    //
+    public static int GetFunctionParameterCount(Item item, string functionName)
+    {
+      var itemKey = item._ItemTypeData.Name.ToLower();
+      var functionTypeData = s_FunctionRepository.GetFunctionData($"{itemKey}.{functionName}");
+      return functionTypeData.ParameterCount;
     }
 
   }

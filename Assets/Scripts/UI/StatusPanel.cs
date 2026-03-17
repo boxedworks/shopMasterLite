@@ -285,7 +285,7 @@ namespace CustomUI
         var sprite = icon.AddComponent<Image>();
         sprite.transform.SetParent(itemSlot.transform, false);
 
-        var loadedSprite = Resources.Load<Sprite>($"Images/Items/{itemData._ItemTypeData.Name.ToLower()}");
+        var loadedSprite = Resources.Load<Sprite>($"Images/items/{itemData._ItemTypeData.Name.ToLower()}");
         sprite.sprite = loadedSprite;
 
         // Set button action
