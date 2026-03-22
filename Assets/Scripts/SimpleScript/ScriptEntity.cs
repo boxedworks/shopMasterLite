@@ -469,12 +469,12 @@ namespace SimpleScript
     {
       if (_currentAnimation != null)
       {
-        Debug.LogWarning($"Setting animation [{animationType}] while already playing animation on entity[{_EntityData.Id}]!");
+        //Debug.LogWarning($"Setting animation [{animationType}] while already playing animation on entity[{_EntityData.Id}]!");
         _currentAnimation.OnAnimatedRemoved();
       }
       if (_animationOverride != Animation.AnimationType.None)
       {
-        Debug.Log($"Animation [{animationType}] overridden by [{_animationOverride}] on entity[{_EntityData.Id}]!");
+        //Debug.Log($"Animation [{animationType}] overridden by [{_animationOverride}] on entity[{_EntityData.Id}]!");
         animationType = _animationOverride;
         durationInTicks = _animationOverrideDuration;
 
@@ -518,7 +518,7 @@ namespace SimpleScript
     void InitializeEntityVariables()
     {
       // Map entity variable indexes
-      _entityVariableMappings = new Dictionary<string, int>();
+      _entityVariableMappings = new();
       for (var i = 0; i < _EntityData.EntityVariables_Int.Count; i++)
         _entityVariableMappings.Add(_EntityData.EntityVariables_Int[i].Name, i);
     }
@@ -564,7 +564,21 @@ namespace SimpleScript
     }
     public void SetEntityVariable_Int(string variableName, int value)
     {
+      if (!HasEntityVariable_Int(variableName))
+      {
+        AddEntityVariable_Int(variableName, value);
+        return;
+      }
       _EntityData.EntityVariables_Int[_entityVariableMappings[variableName]].Value = value;
+    }
+    public void AddEntityVariable_Int(string variableName, int value)
+    {
+      _EntityData.EntityVariables_Int.Add(new ScriptManager.EntityVariable_Int()
+      {
+        Name = variableName,
+        Value = value
+      });
+      _entityVariableMappings.Add(variableName, _EntityData.EntityVariables_Int.Count - 1);
     }
 
     void HandleCommand(EntityCommand entityCommand)

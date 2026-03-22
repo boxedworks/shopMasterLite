@@ -55,7 +55,8 @@ public class SfxController
   }
   public enum RockSfx
   {
-    Hit
+    Hit,
+    Break
   }
 
   public static AudioSource PlaySfxAt(Vector3 position, AudioObjectType audioObjectType, int clipIndex, float volume = 1f, float minPitch = 0.85f, float maxPitch = 1.15f)

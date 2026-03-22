@@ -187,9 +187,20 @@ namespace SimpleScript
       //
       bool _isValid;
       public bool _IsValid { get { return _isValid; } }
+      bool _removeScriptOnExit;
+      public void RemoveScriptOnExit()
+      {
+        _removeScriptOnExit = true;
+      }
       public void RemoveScript()
       {
         _isValid = false;
+
+        // Check destroy
+        if (_removeScriptOnExit)
+        {
+          _attachedEntity.Destroy();
+        }
       }
 
       // Lines in the script
@@ -329,7 +340,7 @@ namespace SimpleScript
 
           // Check external return statement
           var handledExternalReturn = false;
-          if (_externalReturnData != null)
+          if (_externalReturnData != null && _externalReturnData != "null")
           {
             Debug.Log($"External return data found.. replacing: {_externalReturnData} [{_externalReturnStatement}] ........... {_line}");
 
@@ -674,6 +685,8 @@ namespace SimpleScript
           {
             var variable = lineSplit[0].Trim();
             var value = string.Join("=", lineSplit[1..]).Trim();
+
+            // Local variable
             SetVariable(variable, value, false);
             return;
           }
@@ -746,6 +759,7 @@ namespace SimpleScript
 
         val0 = EvaluateParameter(val0);
         val1 = EvaluateParameter(val1);
+        //Debug.Log($"Checking logic: {val0} {operator_} {val1}");
 
         // Evaluate condition
         var returnValue = false;
@@ -924,25 +938,49 @@ namespace SimpleScript
 
       void SetVariable(string variable, string value, bool newAssignment)
       {
-        if (_variables.ContainsKey(variable))
+        // Check entity variable
+        var isEntityVariable = false;
+        if (variable.Contains("."))
         {
-          if (newAssignment)
+          var variableSplit = variable.Split(".");
+
+          var accessorEntity = variableSplit[0];
+          variable = variableSplit[1];
+          if (accessorEntity == "this")
           {
-            logError($"Variable '{variable}' already defined");
-            return;
+            isEntityVariable = true;
           }
         }
-        else
+
+        //
+        if (!isEntityVariable)
         {
-          if (!newAssignment)
+          if (_variables.ContainsKey(variable))
           {
-            logError($"Variable '{variable}' not defined");
-            return;
+            if (newAssignment)
+            {
+              logError($"Variable '{variable}' already defined");
+              return;
+            }
+          }
+          else
+          {
+            if (!newAssignment)
+            {
+              logError($"Variable '{variable}' not defined");
+              return;
+            }
           }
         }
 
         value = EvaluateArithmetic(value);
         if (_breakLoop) return;
+        if (isEntityVariable)
+        {
+          //Debug.Log($"Setting entity variable: {variable} => {value}");
+          _attachedEntity.SetEntityVariable_Int(variable, int.Parse(value));
+          return;
+        }
         if (newAssignment)
           _variables.Add(variable, new Variable(_logicDepth) { _Value = value });
         else
@@ -1047,7 +1085,8 @@ namespace SimpleScript
               if (wordTypeSave == 0)
               {
                 var currentWordLength = currentWord.Length;
-                currentWord = CheckSubstitueVariable(currentWord);
+                if (statementData.Count == 0)
+                  currentWord = CheckSubstitueVariable(currentWord);
                 if (currentWord.Contains('.') || currentWord.Contains(':'))
                 {
                   statement = currentWord + statement.Remove(i - currentWordLength, currentWordLength);
@@ -1170,14 +1209,15 @@ namespace SimpleScript
               if (IsValidVariableEntity(returnStatement))
               {
                 var entityGot = GetEntityByStatement(returnStatement);
+                //Debug.Log($"Is valid variable entity: {returnStatement} .. checking for accessor {word}");
                 if (entityGot.HasEntityVariable_Int(word))
                 {
                   returnStatement = $"{entityGot.GetEntityVariable_Int(word)}";
 
                   validAccessors = new()
-                      {
-                        word
-                      };
+                  {
+                    word
+                  };
                 }
               }
 
@@ -1322,7 +1362,7 @@ namespace SimpleScript
 
               // Check spawned
               if (!_attachedEntity._ScriptSpawned)
-                if (!(isSystemFunction && (functionName == "spawn" || functionName == "exit" || functionName == "setSprite")))
+                if (!(isSystemFunction && (functionName == "spawn" || functionName == "exit" || accessorLastSave == "_")))
                 {
                   logError($"Entity cannot perform actions before spawning");
                   _attachedEntity.Destroy();
@@ -1491,7 +1531,12 @@ namespace SimpleScript
                       case "1002":
                         logError($"Null reference in [{functionName}]");
                         break;
-
+                      case "1003":
+                        var parameterIndex = int.Parse(errorData[1]);
+                        var parameter = functionParameters[parameterIndex];
+                        var expectedType = errorData[2];
+                        logError($"Invalid parameter type for parameter [{parameter}] in function [{functionName}]: expected [{expectedType}]");
+                        break;
 
                       case "9000":
                         var customError = string.Join(" ", errorData[1..]);
@@ -1664,6 +1709,10 @@ namespace SimpleScript
       {
         return Error("1002");
       }
+      public static SystemFunctionReturnData InvalidParameterType(int parameterIndex, string expectedType)
+      {
+        return Error("1003", parameterIndex, expectedType);
+      }
       public static SystemFunctionReturnData NotImplemented()
       {
         return Error("9999");
@@ -1733,12 +1782,38 @@ namespace SimpleScript
 
           // Check return statement
           var returnData = parameters.Length == 1 ? parameters[0] : "null";
-          Debug.Log($"exit() called with return data: {returnData}");
+          //Debug.Log($"exit() called with return data: {returnData}");
 
           // Remove script
           RemoveScript(script, returnData);
 
           return SystemFunctionReturnData.Success(-1);
+        }
+      );
+
+      // Destroy
+      RegisterSystemFunction(
+        "destroy",
+        (ScriptBase script, string accessor, string[] parameters) =>
+        {
+
+          // Validate accessor
+          if (accessor != "")
+          {
+            return SystemFunctionReturnData.InvalidFunction();
+          }
+
+          // Validate parameters
+          if (parameters.Length > 0)
+          {
+            return SystemFunctionReturnData.InvalidParameters(0);
+          }
+
+          // Destroy entity
+          script.RemoveScriptOnExit();
+          script._AttachedEntity.TryMove((-100, 0, 0), false, false);
+
+          return SystemFunctionReturnData.Success(0);
         }
       );
 
@@ -1908,7 +1983,7 @@ namespace SimpleScript
               var entity = ScriptEntity.GetEntity(usePosition);
               if (entity == null)
               {
-                return SystemFunctionReturnData.NullReference();
+                return SystemFunctionReturnData.Success("null", 0);
               }
 
               // Return found entity
@@ -1946,29 +2021,6 @@ namespace SimpleScript
                 return SystemFunctionReturnData.Success(GetItemStatement(item), 0);
               }
 
-            // System
-            case "_":
-
-              // Validate parameters
-              if (parameters.Length != 1)
-              {
-                return SystemFunctionReturnData.InvalidParameters(1);
-              }
-
-              // Get entity by id
-              var entityId = int.Parse(parameters[0]);
-              entity = ScriptEntity.GetEntity(entityId);
-              if (entity == null)
-              {
-                return SystemFunctionReturnData.NullReference();
-              }
-
-              // Return found entity
-              else
-              {
-                return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
-              }
-
             // Invalid accessor
             default:
               return SystemFunctionReturnData.InvalidFunction();
@@ -1995,9 +2047,13 @@ namespace SimpleScript
           }
 
           // Validation error
-          if (!int.TryParse(parameters[0], out var ticks) || ticks < 0)
+          if (!int.TryParse(parameters[0], out var ticks))
           {
-            throw new NotImplementedException();
+            return SystemFunctionReturnData.InvalidParameterType(0, "int");
+          }
+          if (ticks < 1)
+          {
+            return SystemFunctionReturnData.Custom("Tick cooldown must be at least 1");
           }
 
           return SystemFunctionReturnData.Success(ticks);
@@ -2103,7 +2159,7 @@ namespace SimpleScript
           }
 
           // Get sprite path
-          var spritePath = GetStringFromParameter(parameters[1]);
+          var spritePath = GetStringVariable(parameters[1]);
 
           // Set sprite
           entity.SetSprite(spritePath);
@@ -2139,7 +2195,7 @@ namespace SimpleScript
           }
 
           // Get animation params
-          var animation = Enum.Parse<ScriptEntity.Animation.AnimationType>(GetStringFromParameter(parameters[1]));
+          var animation = Enum.Parse<ScriptEntity.Animation.AnimationType>(GetStringVariable(parameters[1]));
           var animationTime = float.Parse(parameters[2]);
 
           // Animate
@@ -2176,7 +2232,7 @@ namespace SimpleScript
           }
 
           // Get animation params
-          var animation = Enum.Parse<ScriptEntity.Animation.AnimationType>(GetStringFromParameter(parameters[1]));
+          var animation = Enum.Parse<ScriptEntity.Animation.AnimationType>(GetStringVariable(parameters[1]));
           var animationTime = float.Parse(parameters[2]);
 
           // Animate
@@ -2213,14 +2269,14 @@ namespace SimpleScript
           }
 
           // Get sfx params
-          var sfxFolderName = Enum.Parse<SfxController.AudioObjectType>(GetStringFromParameter(parameters[1]));
+          var sfxFolderName = Enum.Parse<SfxController.AudioObjectType>(GetStringVariable(parameters[1]));
           var sfxName = -1;
           if (sfxFolderName == SfxController.AudioObjectType.Character)
-            sfxName = (int)Enum.Parse<SfxController.CharacterSfx>(GetStringFromParameter(parameters[2]));
+            sfxName = (int)Enum.Parse<SfxController.CharacterSfx>(GetStringVariable(parameters[2]));
           else if (sfxFolderName == SfxController.AudioObjectType.Rock)
-            sfxName = (int)Enum.Parse<SfxController.RockSfx>(GetStringFromParameter(parameters[2]));
+            sfxName = (int)Enum.Parse<SfxController.RockSfx>(GetStringVariable(parameters[2]));
           else if (sfxFolderName == SfxController.AudioObjectType.PlayerController)
-            sfxName = (int)Enum.Parse<SfxController.PlayerControllerSfx>(GetStringFromParameter(parameters[2]));
+            sfxName = (int)Enum.Parse<SfxController.PlayerControllerSfx>(GetStringVariable(parameters[2]));
           if (sfxName == -1)
             return SystemFunctionReturnData.Custom("Sfx not found");
 
@@ -2303,7 +2359,7 @@ namespace SimpleScript
     {
       return variable.StartsWith("\"") && variable.EndsWith("\"");
     }
-    static string GetStringFromParameter(string param)
+    static string GetStringVariable(string param)
     {
       return param[1..^1];
     }

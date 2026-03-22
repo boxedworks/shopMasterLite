@@ -49,6 +49,33 @@ public class GameController : MonoBehaviour
       //
       new ScriptEntity(1, new Vector3(0, 0, -1), -1);
       new ScriptEntity(2, new Vector3(0, 0, -3), -1);
+
+      new ScriptEntity(1, new Vector3(3, 0, 0), -1);
+      new ScriptEntity(1, new Vector3(3, 0, -1), -1);
+      new ScriptEntity(1, new Vector3(3, 0, 1), -1);
+      new ScriptEntity(1, new Vector3(3, 0, -2), -1);
+      new ScriptEntity(1, new Vector3(3, 0, 2), -1);
+      new ScriptEntity(1, new Vector3(3, 0, -3), -1);
+      new ScriptEntity(1, new Vector3(3, 0, 3), -1);
+
+      new ScriptEntity(1, new Vector3(-3, 0, 0), -1);
+      new ScriptEntity(1, new Vector3(-3, 0, -1), -1);
+      new ScriptEntity(1, new Vector3(-3, 0, 1), -1);
+      new ScriptEntity(1, new Vector3(-3, 0, -2), -1);
+      new ScriptEntity(1, new Vector3(-3, 0, 2), -1);
+      new ScriptEntity(1, new Vector3(-3, 0, -3), -1);
+      new ScriptEntity(1, new Vector3(-3, 0, 3), -1);
+
+      new ScriptEntity(1, new Vector3(2, 0, -3), -1);
+      new ScriptEntity(1, new Vector3(-2, 0, 3), -1);
+      new ScriptEntity(1, new Vector3(1, 0, -3), -1);
+      new ScriptEntity(1, new Vector3(-1, 0, 3), -1);
+      new ScriptEntity(1, new Vector3(0, 0, 3), -1);
+      new ScriptEntity(1, new Vector3(-2, 0, -3), -1);
+      new ScriptEntity(1, new Vector3(2, 0, 3), -1);
+      new ScriptEntity(1, new Vector3(1, 0, 3), -1);
+      new ScriptEntity(1, new Vector3(-1, 0, -3), -1);
+
     }
 
 

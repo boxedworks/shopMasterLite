@@ -1,3 +1,5 @@
 _:setSprite(this, "entities/rock")
 
+this.count = 2
+
 exit()
