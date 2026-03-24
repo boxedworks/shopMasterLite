@@ -1,12 +1,18 @@
+spawn()
 
-up()
 down()
+get():jump()
 
-var fence = get()
-fence:jump()
+log("item count()):" + items.count)
+log(items.capacity)
+log(items.isFull)
+log(items.isEmpty)
+
+waitFor(false)
 
 var rock = get()
-rock:mine()
-
+if(rock != null)
+	rock:mine()
+end
 up()
-fence:jump()
+get():jump()
