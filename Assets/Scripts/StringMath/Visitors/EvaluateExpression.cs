@@ -1,7 +1,7 @@
-﻿using StringMath.Expressions;
-
-namespace Assets.Scripts.StringMath
+﻿namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   /// <inheritdoc />
   internal sealed class EvaluateExpression : BaseExpressionVisitor
   {

@@ -1,9 +1,10 @@
-﻿using StringMath.Expressions;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   internal class ExtractVariables : BaseExpressionVisitor
   {
     private readonly HashSet<string> _variables = new HashSet<string>(StringComparer.Ordinal);

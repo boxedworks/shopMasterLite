@@ -1,8 +1,8 @@
-﻿using StringMath.Expressions;
-using System;
-
+﻿using System;
 namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   /// <summary>Helpful extension methods.</summary>
   internal static class Extensions
   {

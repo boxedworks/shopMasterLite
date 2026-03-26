@@ -9,6 +9,7 @@ using System.IO;
 using System;
 
 using CustomUI;
+using System.Text.RegularExpressions;
 
 namespace Assets.Scripts.Game.SimpleScript
 {
@@ -28,7 +29,7 @@ namespace Assets.Scripts.Game.SimpleScript
     {
       s_Singleton = new ScriptManager();
 
-      ScriptEntityHelper.Init();
+      new ScriptEntityHelper();
       s_Singleton.InitializeSystemFunctions();
     }
 
@@ -1089,6 +1090,8 @@ namespace Assets.Scripts.Game.SimpleScript
 
             // Check next word type
             var resetWord = true;
+
+            // Variable
             if (letter == '.')
             {
 
@@ -1098,6 +1101,8 @@ namespace Assets.Scripts.Game.SimpleScript
               else
                 wordType = 0;
             }
+
+            // Function
             else if (letter == ':')
             {
               if (insideString)
@@ -1105,6 +1110,8 @@ namespace Assets.Scripts.Game.SimpleScript
               else
                 wordType = 1;
             }
+
+            // String
             else if (letter == '"')
             {
               insideString = !insideString;
@@ -1117,10 +1124,10 @@ namespace Assets.Scripts.Game.SimpleScript
                 if (insideString)
                 {
                   wordType = 0;
-                  resetWord = false;
                 }
-                else if (!isLastLetter)
-                  currentWord += letter;
+
+                if (!isLastLetter)
+                  resetWord = false;
               }
             }
 
@@ -1141,7 +1148,7 @@ namespace Assets.Scripts.Game.SimpleScript
                 }
               }
 
-              Debug.Log($"Got statement word: {currentWord} .. type: {wordTypeSave}");
+              //Debug.Log($"Got statement word: {currentWord} .. type: {wordTypeSave}");
               statementData.Add((currentWord, wordTypeSave));
 
               // Reset for next word
@@ -1195,6 +1202,25 @@ namespace Assets.Scripts.Game.SimpleScript
                 // Check simple string
                 if (IsStringVariable(word))
                 {
+
+                  // Substitue string variables
+                  while (word.Contains('{') && word.Contains('}'))
+                  {
+                    // Use regex {(.*?)} to find all variables in the string and substitute them
+                    var regex = new Regex(@"{(.*?)}");
+                    var matches = regex.Matches(word);
+                    foreach (Match match in matches)
+                    {
+                      //Debug.Log($"Found variable in string: {match.Groups[1].Value}");
+                      var variableInString = match.Groups[1].Value;
+                      var variableValue = EvaluateParameter(variableInString);
+                      word = word.Replace($"{{{variableInString}}}", variableValue);
+                      //Debug.Log($"Substituted variable in string: {variableInString} => {variableValue} .. new string: {word}");
+
+                      break;
+                    }
+                  }
+
                   if (parameterCheck)
                     returnStatement = word;
                   continue;
@@ -1295,10 +1321,10 @@ namespace Assets.Scripts.Game.SimpleScript
 
                   // Check is full/empty
                   case "isFull":
-                    returnStatement = (storage?.Count(x => x != null) == storage?.Count).ToString();
+                    returnStatement = (storage?.Count(x => x != null) == storage?.Count).ToString().ToLower();
                     continue;
                   case "isEmpty":
-                    returnStatement = (storage?.Count(x => x != null) == 0).ToString();
+                    returnStatement = (storage?.Count(x => x != null) == 0).ToString().ToLower();
                     continue;
                 }
               }
@@ -1344,20 +1370,27 @@ namespace Assets.Scripts.Game.SimpleScript
                 {
                   var parameterDepth = 0;
                   var parameterGot = "";
+                  insideString = false;
                   for (var u = 0; u < parameters.Length; u++)
                   {
                     var nextChar = parameters[u];
-                    if (nextChar == ' ') continue;
 
                     // Check depth
-                    if (nextChar == '(' || nextChar == '[')
-                      parameterDepth++;
-                    if (nextChar == ')' || nextChar == ']')
-                      parameterDepth--;
+                    if (!insideString)
+                    {
+                      if (nextChar == '(' || nextChar == '[')
+                        parameterDepth++;
+                      if (nextChar == ')' || nextChar == ']')
+                        parameterDepth--;
+                    }
+
+                    // String
+                    if (nextChar == '"')
+                      insideString = !insideString;
 
                     //
                     if (nextChar == ',')
-                      if (parameterDepth == 0)
+                      if (parameterDepth == 0 && !insideString)
                       {
                         parameterGot = parameterGot.Trim();
                         if (parameterGot.Length > 0)
@@ -1379,7 +1412,7 @@ namespace Assets.Scripts.Game.SimpleScript
                   functionParameters[u] = EvaluateArithmetic(functionParameters[u]);
               }
 
-              Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. returnStatement: {returnStatement} .. ctt: {currentTarget?._Type} .. paramCheck: {parameterCheck}");
+              //Debug.Log($"Checking method {functionName} with parameters: {string.Join(", ", functionParameters)} .. returnStatement: {returnStatement} .. ctt: {currentTarget?._Type} .. paramCheck: {parameterCheck}");
 
               if (_breakLoop) break;
 
@@ -1678,7 +1711,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
         var evaluated = false;
 
-        if (!statement.Contains("\""))
+        if (!statement.Contains('"'))
         {
           foreach (var arithmeticOp in new char[] { '-', '+', '*', '/' })
             if (statement.Contains(arithmeticOp))
@@ -1691,14 +1724,14 @@ namespace Assets.Scripts.Game.SimpleScript
               for (var y = 0; y < statementSplit.Length; y++)
                 statementSplit[y] = EvalutateP(statementSplit[y]);
               statement = string.Join(arithmeticOp, statementSplit);
-
-              Debug.Log($"Evaluated arithmetic [{arithmeticOp}]: {ss} => {statement}");
             }
         }
+
+        // String math
         if (evaluated)
           statement = $"{(float)statement.Eval()}";
 
-        // No arthimetic
+        // No arithmetic
         else
           statement = EvalutateP(statement);
 

@@ -37,6 +37,7 @@ namespace Assets.Scripts.Game.SimpleScript
     Transform _billboard;
     Transform _sprite { get { return _billboard.GetChild(0); } }
     bool _hasSprite;
+    string _cubeSpritePath;
 
     // Animation data
     Animation _currentAnimation;
@@ -186,6 +187,7 @@ namespace Assets.Scripts.Game.SimpleScript
           if (script._IsValid)
             ScriptManager.RemoveScript(script);
 
+      EntityMaterialManager.OnEntityRemoved(_cubeSpritePath);
       Object.Destroy(_billboard.gameObject);
     }
     public static void DestroyEntity(ScriptEntity entity)
@@ -327,15 +329,22 @@ namespace Assets.Scripts.Game.SimpleScript
     {
 
       // 3d model
-      if (spritePath == "cube")
+      if (spritePath.StartsWith("blocks/"))
       {
         Object.Destroy(_sprite.gameObject);
         var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
         cube.transform.parent = _billboard;
         cube.transform.localPosition = Vector3.zero;
 
-        _hasSprite = false;
+        // Get material from manager
+        var material = EntityMaterialManager.GetMaterialBySpritePath(spritePath);
+        cube.GetComponent<Renderer>().material = material;
 
+        if (_cubeSpritePath != null)
+          EntityMaterialManager.OnEntityRemoved(_cubeSpritePath);
+
+        _cubeSpritePath = spritePath;
+        _hasSprite = false;
       }
 
       // Normal sprite

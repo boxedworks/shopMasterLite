@@ -3,7 +3,8 @@ using UnityEngine.EventSystems;
 
 using System.Linq;
 
-using SimpleScript;
+using Assets.Scripts.Game.SimpleScript;
+using UnityEngine.InputSystem;
 
 namespace CustomUI
 {
@@ -20,6 +21,12 @@ namespace CustomUI
     string _terminalHistory;
     int _terminalHistoryLines, _terminalHistoryMaxLines = 13;
     string _currentInput;
+
+    // Command history (index 0 = most recent)
+    System.Collections.Generic.List<string> _commandHistory = new();
+    const int _commandHistoryMaxCount = 9;
+    int _commandHistoryIndex = -1; // -1 = not browsing history
+    string _pendingInput = ""; // input saved before browsing history
 
     public static bool _IsFocused { get { return EventSystem.current.currentSelectedGameObject == s_Singleton._tmpInput.gameObject; } }
 
@@ -41,15 +48,51 @@ namespace CustomUI
       {
         HandleCommand(input);
 
+        _commandHistoryIndex = -1;
+        _pendingInput = "";
         _currentInput = _tmpInput.text = "";
         Focus();
       });
     }
 
     //
+    public void Update()
+    {
+      if (!_IsFocused) return;
+
+      if (Keyboard.current.upArrowKey.wasPressedThisFrame)
+      {
+        if (_commandHistory.Count == 0) return;
+        if (_commandHistoryIndex == -1)
+          _pendingInput = _tmpInput.text;
+        _commandHistoryIndex = Mathf.Min(_commandHistoryIndex + 1, _commandHistory.Count - 1);
+        _tmpInput.text = _commandHistory[_commandHistoryIndex];
+        _tmpInput.caretPosition = _tmpInput.text.Length;
+      }
+      else if (Keyboard.current.downArrowKey.wasPressedThisFrame)
+      {
+        if (_commandHistoryIndex == -1) return;
+        _commandHistoryIndex--;
+        _tmpInput.text = _commandHistoryIndex == -1
+          ? _pendingInput
+          : _commandHistory[_commandHistoryIndex];
+        _tmpInput.caretPosition = _tmpInput.text.Length;
+      }
+    }
+
+    //
     public static void HandleCommand(string command)
     {
       command = command.Trim();
+
+      // Record non-empty commands in history
+      if (!string.IsNullOrEmpty(command))
+      {
+        var hist = s_Singleton._commandHistory;
+        hist.Insert(0, command);
+        if (hist.Count > _commandHistoryMaxCount)
+          hist.RemoveAt(hist.Count - 1);
+      }
       switch (command)
       {
         case "script new":
@@ -66,6 +109,14 @@ namespace CustomUI
 
           UIElements.s_Singleton._EditorPanel.RunNewScript();
           break;
+
+        case "remove":
+
+          var selectedEntity = PlayerController.s_Singleton._SelectedEntity;
+          if (selectedEntity != null)
+            ScriptEntity.DestroyEntity(selectedEntity);
+          break;
+
         default:
           s_Singleton.LogMessage($"<color=red>Unknown command: {command}</color>");
           break;

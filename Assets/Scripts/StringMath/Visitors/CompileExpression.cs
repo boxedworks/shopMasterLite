@@ -1,11 +1,12 @@
-﻿using SM = StringMath.Expressions;
-using System;
+﻿using System;
 using System.Linq.Expressions;
 using System.Linq;
 using System.Collections.Generic;
 
 namespace Assets.Scripts.StringMath
 {
+  using SM = Expressions;
+
   internal class CompileExpression
   {
     private static readonly ParameterExpression _contextParam = Expression.Parameter(typeof(IMathContext), "ctx");

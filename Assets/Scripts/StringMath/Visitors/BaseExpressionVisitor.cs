@@ -1,7 +1,7 @@
-﻿using StringMath.Expressions;
-
-namespace Assets.Scripts.StringMath
+﻿namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   internal abstract class BaseExpressionVisitor : IExpressionVisitor
   {
     public IExpression Visit(IExpression expression)

@@ -5,14 +5,15 @@ using UnityEngine;
 namespace Assets.Scripts.Game.SimpleScript
 {
 
-  public static class ScriptEntityHelper
+  public class ScriptEntityHelper
   {
+    public static ScriptEntityHelper s_Singleton { get; private set; }
 
-    static List<EntityTypeData> s_entityTypeData
+    List<EntityTypeData> _entityTypeData
     {
       get
       {
-        return s_entityDataWrapper._EntityTypeData;
+        return _entityDataWrapper._EntityTypeData;
       }
     }
     [System.Serializable]
@@ -20,19 +21,23 @@ namespace Assets.Scripts.Game.SimpleScript
     {
       public List<EntityTypeData> _EntityTypeData;
     }
-    static EntityTypeDataWrapper s_entityDataWrapper;
-
-
-    //
-    public static FunctionRepository s_FunctionRepository;
+    EntityTypeDataWrapper _entityDataWrapper;
 
     //
-    public static void Init()
+    FunctionRepository _functionRepository;
+    public static FunctionRepository s_FunctionRepository { get { return s_Singleton._functionRepository; } }
+
+    //
+    public ScriptEntityHelper()
     {
+      s_Singleton = this;
+
+      new EntityMaterialManager();
+
       ScriptEntity.s_ScriptEntities = new();
       ScriptEntity.s_ScriptEntitiesMapped = new();
 
-      s_FunctionRepository = new();
+      s_Singleton._functionRepository = new();
 
       LoadTypeData();
     }
@@ -40,30 +45,30 @@ namespace Assets.Scripts.Game.SimpleScript
     // Load objects from json
     public static void LoadTypeData()
     {
-      var functionsByType = s_FunctionRepository.Load(true);
+      var functionsByType = s_Singleton._functionRepository.Load(true);
 
       // Load in entity type data
       var rawText = System.IO.File.ReadAllText("entityTypeData.json");
       var jsonData = JsonUtility.FromJson<EntityTypeDataWrapper>(rawText);
-      s_entityDataWrapper = jsonData;
+      s_Singleton._entityDataWrapper = jsonData;
 
       // Match functions per entity type
-      for (var i = 0; i < s_entityTypeData.Count; i++)
+      for (var i = 0; i < s_Singleton._entityTypeData.Count; i++)
       {
-        var entityTypeData = s_entityTypeData[i];
+        var entityTypeData = s_Singleton._entityTypeData[i];
         var functionIds = new List<int>();
         var entityTypeKey = entityTypeData.Name.ToLower();
         if (functionsByType.ContainsKey(entityTypeKey))
           foreach (var func in functionsByType[entityTypeKey])
           {
-            var id = s_FunctionRepository.GetFunctionId($"{entityTypeKey}.{func}");
+            var id = s_Singleton._functionRepository.GetFunctionId($"{entityTypeKey}.{func}");
             functionIds.Add(id);
           }
         if (functionIds.Count > 0)
         {
           var publicFunctionIds = functionIds.ToArray();
           entityTypeData.PublicFunctionIds = publicFunctionIds;
-          s_entityTypeData[i] = entityTypeData;
+          s_Singleton._entityTypeData[i] = entityTypeData;
         }
       }
     }
@@ -71,14 +76,14 @@ namespace Assets.Scripts.Game.SimpleScript
     // Save objects to json
     public static void SaveTypeData()
     {
-      var jsonData = JsonUtility.ToJson(s_entityDataWrapper, true);
+      var jsonData = JsonUtility.ToJson(s_Singleton._entityDataWrapper, true);
       System.IO.File.WriteAllText("entityTypeData.json", jsonData);
     }
 
     //
     public static EntityTypeData GetEntityTypeData(int id)
     {
-      return s_entityTypeData[id];
+      return s_Singleton._entityTypeData[id];
     }
     public static EntityTypeData GetEntityTypeData(ScriptEntity entity)
     {
@@ -89,7 +94,7 @@ namespace Assets.Scripts.Game.SimpleScript
     public static bool HasFunction(ScriptEntity entity, string functionName)
     {
       var entityKey = entity._EntityTypeData.Name.ToLower();
-      var functionId = s_FunctionRepository.GetFunctionId($"{entityKey}.{functionName}");
+      var functionId = s_Singleton._functionRepository.GetFunctionId($"{entityKey}.{functionName}");
       var typeData = entity._EntityTypeData;
       var functions = typeData.PublicFunctionIds;
       return functions?.Contains(functionId) ?? false;
@@ -99,7 +104,7 @@ namespace Assets.Scripts.Game.SimpleScript
     public static int GetFunctionParameterCount(ScriptEntity entity, string functionName)
     {
       var entityKey = entity._EntityTypeData.Name.ToLower();
-      var functionTypeData = s_FunctionRepository.GetFunctionData($"{entityKey}.{functionName}");
+      var functionTypeData = s_Singleton._functionRepository.GetFunctionData($"{entityKey}.{functionName}");
       return functionTypeData.ParameterCount;
     }
   }

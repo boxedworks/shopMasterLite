@@ -1,8 +1,9 @@
 ﻿#nullable enable
-using StringMath.Expressions;
 
 namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   /// <summary>A simple parser.</summary>
   internal sealed class Parser : IParser
   {

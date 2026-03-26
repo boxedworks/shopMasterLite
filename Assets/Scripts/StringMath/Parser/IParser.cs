@@ -1,7 +1,8 @@
-﻿using StringMath.Expressions;
-
+﻿
 namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   /// <summary>Contract for parsers.</summary>
   internal interface IParser
   {

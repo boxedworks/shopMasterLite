@@ -1,9 +1,10 @@
 ﻿#nullable enable
 using System;
-using StringMath.Expressions;
 
 namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   /// <summary>Base library exception.</summary>
   public sealed class MathException : Exception
   {

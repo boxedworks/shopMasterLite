@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 using System.Linq;
-using SimpleScript;
+using Assets.Scripts.Game.SimpleScript;
 
 namespace CustomUI
 {
@@ -80,6 +80,7 @@ namespace CustomUI
 
       //
       _EditorPanel.Update();
+      Terminal.s_Singleton.Update();
     }
 
     // Keep panel from going off screen keeping into account recttransform pivot

@@ -1,14 +1,20 @@
 using UnityEngine;
 
-using SimpleScript;
+using Assets.Scripts.Game.SimpleScript;
 using CustomUI;
 
 public class GameController : MonoBehaviour
 {
+  public static GameController s_Singleton { get; private set; }
+
   UIElements _uiElements { get { return UIElements.s_Singleton; } }
+
+  public Material _baseEntityMaterial;
 
   public void Start()
   {
+    s_Singleton = this;
+
     new GameResources();
     ScriptManager.Initialize();
     ItemManager.Initialize();
@@ -49,6 +55,7 @@ public class GameController : MonoBehaviour
       //
       new ScriptEntity(1, new Vector3(0, 0, -1), -1);
       new ScriptEntity(2, new Vector3(0, 0, -3), -1);
+      new ScriptEntity(2, new Vector3(2, 0, -2), -1);
 
       new ScriptEntity(1, new Vector3(3, 0, 0), -1);
       new ScriptEntity(1, new Vector3(3, 0, -1), -1);

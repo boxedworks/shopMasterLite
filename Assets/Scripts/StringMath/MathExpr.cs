@@ -1,11 +1,12 @@
 ﻿#nullable enable
-using StringMath.Expressions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Assets.Scripts.StringMath
 {
+  using StringMath.Expressions;
+
   /// <summary>A mathematical expression.</summary>
   public class MathExpr
   {

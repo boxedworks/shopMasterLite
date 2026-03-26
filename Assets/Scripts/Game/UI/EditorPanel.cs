@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 using System.Linq;
 
-using SimpleScript;
+using Assets.Scripts.Game.SimpleScript;
 namespace CustomUI
 {
   public class EditorPanel

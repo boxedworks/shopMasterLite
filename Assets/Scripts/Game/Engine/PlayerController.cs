@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-using SimpleScript;
+using Assets.Scripts.Game.SimpleScript;
 using CustomUI;
 
 public class PlayerController
