@@ -48,7 +48,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
         materialCountBySpritePath[spritePath]++;
 
-        Debug.Log("Material already exists for " + spritePath);
+        //Debug.Log("Material already exists for " + spritePath);
       }
 
       return material;

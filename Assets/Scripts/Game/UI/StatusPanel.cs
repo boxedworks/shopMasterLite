@@ -223,7 +223,7 @@ namespace CustomUI
     void OpenInventoryPanel()
     {
       var panelBase = UIElements.s_Singleton._InventoryPanel;
-      var panel = GameObject.Instantiate(panelBase, _panel.GetChild(1)).transform as RectTransform;
+      var panel = Object.Instantiate(panelBase, _panel.GetChild(1)).transform as RectTransform;
 
       // Create status based on size
       var entityStorage = _entity._Storage;
@@ -239,13 +239,13 @@ namespace CustomUI
       var statusHeight = Mathf.CeilToInt(statusSize / (float)statusWidth);
       for (int y = 0; y < statusHeight; y++)
       {
-        var row = y == 0 ? rowBase : GameObject.Instantiate(rowBase, rowBase.parent);
+        var row = y == 0 ? rowBase : Object.Instantiate(rowBase, rowBase.parent);
       }
 
       // Create buttons based on status size
       if (statusSize == 0)
       {
-        GameObject.Destroy(rowBase.gameObject);
+        Object.Destroy(rowBase.gameObject);
       }
       else
         for (int y = 0; y < statusHeight; y++)
@@ -258,7 +258,7 @@ namespace CustomUI
             if (buttonIndex >= statusSize)
               break;
 
-            var itemSlot = x == 0 ? row.GetChild(0).gameObject : GameObject.Instantiate(itemSlotBase, row);
+            var itemSlot = x == 0 ? row.GetChild(0).gameObject : Object.Instantiate(itemSlotBase, row);
             itemSlots.Add(itemSlot);
           }
 
@@ -271,10 +271,9 @@ namespace CustomUI
         }
 
       // Item slots
-      var itemDataList = _entity._Storage;
-      for (int i = 0; i < itemDataList.Count; i++)
+      for (int i = 0; i < entityStorage.Count; i++)
       {
-        var itemData = itemDataList[i];
+        var itemData = entityStorage[i];
         if (itemData == null)
           continue;
         var itemSlot = itemSlots[i];
@@ -285,7 +284,8 @@ namespace CustomUI
         var sprite = icon.AddComponent<Image>();
         sprite.transform.SetParent(itemSlot.transform, false);
 
-        var loadedSprite = Resources.Load<Sprite>($"Images/items/{itemData._ItemTypeData.Name.ToLower()}");
+        var item = ItemManager.GetItem(itemData.Id);
+        var loadedSprite = Resources.Load<Sprite>($"Images/items/{item._ItemTypeData.Name.ToLower()}");
         sprite.sprite = loadedSprite;
 
         // Set button action
@@ -293,7 +293,7 @@ namespace CustomUI
         var slotIndex = i;
         button.onClick.AddListener(() =>
         {
-          Debug.Log("Clicked item slot " + slotIndex + " with item " + (itemData != null ? itemData._ItemTypeData.Name : "null"));
+          Debug.Log("Clicked item slot " + slotIndex + " with item " + (item != null ? item._ItemTypeData.Name : "null"));
         });
       }
 
@@ -334,7 +334,7 @@ namespace CustomUI
     void OpenScriptsPanel()
     {
       var panelBase = UIElements.s_Singleton._ScriptsPanel;
-      var panel = GameObject.Instantiate(panelBase, _panel.GetChild(1)).transform as RectTransform;
+      var panel = Object.Instantiate(panelBase, _panel.GetChild(1)).transform as RectTransform;
 
       //
       _openSubPanels.Add(SubPanelType.Scripts, panel);
@@ -350,15 +350,58 @@ namespace CustomUI
     void UpdateScriptsPanel()
     {
       var panel = _openSubPanels[SubPanelType.Scripts];
-      var scriptText = panel.GetChild(1).GetChild(0).GetChild(0).GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
-      var button = panel.GetChild(1).GetChild(0).GetChild(0).GetChild(1).GetComponent<Button>();
+      var scriptEntries = panel.GetChild(1);
+
+      var entriesAdded = 0;
+      (TMPro.TextMeshProUGUI text, Button button) GetEntry()
+      {
+        // Try to get existing entry, else create new one
+        var hasEntry = entriesAdded < scriptEntries.childCount;
+        var entry = hasEntry ? scriptEntries.GetChild(entriesAdded) : Object.Instantiate(scriptEntries.GetChild(0).gameObject, scriptEntries).transform;
+        var text = entry.GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
+        var button = entry.GetChild(1).GetComponent<Button>();
+
+        entriesAdded++;
+
+        return (text, button);
+      }
+
+      // Add list of engine scripts
+      if (_entity._EntityData.OwnerId == -1)
+      {
+        var typeName = _entity._EntityTypeData.Name.ToLower();
+        var methods = ScriptEntityHelper.s_FunctionRepository.GetFunctionsByType(typeName);
+        foreach (var method in methods)
+        {
+          var (scriptText, scriptButton) = GetEntry();
+
+          scriptText.text = $"<b>System:</b> {method}";
+
+          scriptButton.onClick.RemoveAllListeners();
+          scriptButton.onClick.AddListener(() =>
+          {
+            var newScript = _entity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
+            {
+              PathTo = $"{typeName}.{method}",
+              ScriptType = ScriptManager.ScriptType.ENTITY
+            });
+            if (newScript == null)
+              return;
+
+            UpdateScriptsPanel();
+          });
+        }
+      }
+
+      // No attached scripts
       if (_entity._AttachedScripts == null)
       {
+        var (scriptText, scriptButton) = GetEntry();
         scriptText.text = "No scripts attached.";
 
-        button.onClick.RemoveAllListeners();
+        scriptButton.onClick.RemoveAllListeners();
         if (_entity._IsPlayer)
-          button.onClick.AddListener(() =>
+          scriptButton.onClick.AddListener(() =>
           {
             var newScript = _entity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
             {
@@ -370,31 +413,55 @@ namespace CustomUI
 
             UpdateScriptsPanel();
           });
-        return;
       }
 
-      var script = _entity._AttachedScripts[0];
-      string scriptStatus;
-      if (script._IsValid)
-        scriptStatus = "<color=blue>Running</color>";
-      else if (script._HasError)
-        scriptStatus = "<color=red>Error</color>";
+      // List attached scripts
       else
-        scriptStatus = "Exited";
-      scriptText.text = $@"<b>Name: test</b>
+      {
+        for (var i = 0; i < _entity._AttachedScripts.Count; i++)
+        {
+          var (scriptText, scriptButton) = GetEntry();
+
+          var script = _entity._AttachedScripts[i];
+          string scriptStatus;
+          if (script._IsValid)
+            scriptStatus = "<color=blue>Running</color>";
+          else if (script._HasError)
+            scriptStatus = "<color=red>Error</color>";
+          else
+            scriptStatus = "Exited";
+          var scriptName = script._Name ?? $"Custom script";
+          scriptText.text = $@"<b>Name: {scriptName}</b>
 <b>State: {scriptStatus}</b>";
 
-      button.onClick.RemoveAllListeners();
-      if (_entity._IsPlayer)
-        button.onClick.AddListener(() =>
-        {
-          _entity.Destroy();
-        });
+          scriptButton.onClick.RemoveAllListeners();
+          if (_entity._IsPlayer)
+            scriptButton.onClick.AddListener(() =>
+            {
+              _entity.Destroy();
+            });
+        }
+      }
+
+      // Clean up extra entries
+      for (var i = scriptEntries.childCount - 1; i >= entriesAdded; i--)
+        Object.DestroyImmediate(scriptEntries.GetChild(i).gameObject);
+
+      // Set panel size
+      var baseSize = 111f;
+      var subSize = 75f;
+      var entrySize = 60f;
+      var panelOffset = Mathf.Clamp(entriesAdded - 1, 0, int.MaxValue) * entrySize + (entriesAdded > 1 ? 5f : 0);
+
+      panel.sizeDelta = new Vector2(panel.sizeDelta.x, baseSize + panelOffset);
+
+      var panelSub = panel.GetChild(1) as RectTransform;
+      panelSub.sizeDelta = new Vector2(panelSub.sizeDelta.x, subSize + panelOffset);
     }
 
     void ClosePanel(SubPanelType panelKey)
     {
-      GameObject.Destroy(_openSubPanels[panelKey].gameObject);
+      Object.Destroy(_openSubPanels[panelKey].gameObject);
       _openSubPanels.Remove(panelKey);
     }
 
@@ -403,7 +470,7 @@ namespace CustomUI
     {
 
       // Destroy status panel
-      GameObject.Destroy(_panel.gameObject);
+      Object.Destroy(_panel.gameObject);
       _panel = null;
 
       // Unregister from manager

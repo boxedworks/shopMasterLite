@@ -20,26 +20,27 @@ namespace Assets.Scripts.Game.SimpleScript
     }
     Dictionary<string, FunctionData> _functionData;
     Dictionary<int, string> _functionMapping;
+    Dictionary<string, List<string>> _functionsByType;
 
     //
     public FunctionRepository()
     {
     }
 
-    public Dictionary<string, List<string>> Load(bool isEntityScripts)
+    public void Load(bool isEntityScripts)
     {
       _functionData = new();
       _functionMapping = new();
 
       // Load functions from disk
-      Dictionary<string, List<string>> functionsByType = new();
+      _functionsByType = new();
       var scripts = isEntityScripts ? ScriptManager.GetSystemEntityScripts() : ScriptManager.GetSystemItemScripts();
       foreach (var script in scripts)
       {
         var fileName = script.Split(@"\")[^1];
         var scriptData = fileName.Split(".");
 
-        var objectName = scriptData[0];
+        var typeName = scriptData[0];
         var functionName = scriptData[1];
 
         // Load number of params
@@ -55,14 +56,12 @@ namespace Assets.Scripts.Game.SimpleScript
         }
 
         // Add function data
-        //Debug.Log($"Loaded script [Entity script = {isEntityScripts}] {fileName} with {numParams} params");
+        //Debug.Log($"Loaded script [Entity script = {isEntityScripts}] {fileName} with {numParams} params.. [{typeName}]");
         AddFunction(fileName, "System loaded...", numParams);
-        if (!functionsByType.ContainsKey(objectName))
-          functionsByType.Add(objectName, new());
-        functionsByType[objectName].Add(functionName);
+        if (!_functionsByType.ContainsKey(typeName))
+          _functionsByType.Add(typeName, new());
+        _functionsByType[typeName].Add(functionName);
       }
-
-      return functionsByType;
     }
 
     void AddFunction(string name, string description, int parameterCount)
@@ -78,6 +77,14 @@ namespace Assets.Scripts.Game.SimpleScript
 
         Description = description,
       });
+    }
+
+    // Get all functions for a given type
+    public List<string> GetFunctionsByType(string typeName)
+    {
+      if (_functionsByType.ContainsKey(typeName))
+        return _functionsByType[typeName];
+      return new List<string>();
     }
 
     //

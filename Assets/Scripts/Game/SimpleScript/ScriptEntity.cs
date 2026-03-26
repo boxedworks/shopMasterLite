@@ -27,7 +27,7 @@ namespace Assets.Scripts.Game.SimpleScript
     public Vector3 _TilePositionVector3 { get { return new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z); } }
     public int _Direction { get { return _EntityData.Direction; } }
     public bool _IsPlayer { get { return _EntityData.OwnerId == 0; } }
-    public List<Item> _Storage { get { return _EntityData.ItemStorage; } }
+    public List<Item.ItemData> _Storage { get { return _EntityData.ItemStorage; } }
     public bool _HasStorage { get { return (_Storage?.Count ?? 0) > 0; } }
     public bool _HasLog { get { return (_EntityData.Log?.Count ?? 0) > 0; } }
     bool _spawned, _scriptSpawned;
@@ -181,12 +181,22 @@ namespace Assets.Scripts.Game.SimpleScript
       Debug.Log("Destroying entity[" + _EntityTypeData.Name + "]");
       _spawned = false;
 
+      // Un-register entity
       RemoveScriptEntity(this);
+
+      // Remove any scripts on the entity
       if (_attachedScripts != null)
         foreach (var script in _attachedScripts)
           if (script._IsValid)
             ScriptManager.RemoveScript(script);
 
+      // Destroy any objects
+      if (_HasStorage)
+        foreach (var itemData in _Storage)
+          if (itemData != null)
+            ItemManager.GetItem(itemData.Id)?.Destroy();
+
+      // Cleanup graphics
       EntityMaterialManager.OnEntityRemoved(_cubeSpritePath);
       Object.Destroy(_billboard.gameObject);
     }
@@ -586,7 +596,7 @@ namespace Assets.Scripts.Game.SimpleScript
       public int Direction;
 
       // Item storage
-      public List<Item> ItemStorage;
+      public List<Item.ItemData> ItemStorage;
 
       // Logger
       public List<string> Log;
@@ -776,7 +786,10 @@ namespace Assets.Scripts.Game.SimpleScript
         _ => ScriptManager.LoadPlayerScript(scriptLoadData.PathTo)
       });
 
-      return LoadAndAttachRawScript(rawScript);
+      var script = LoadAndAttachRawScript(rawScript);
+      if (script != null)
+        script._Name = scriptLoadData.PathTo;
+      return script;
     }
 
     //

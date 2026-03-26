@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 using UnityEngine;
 
 namespace Assets.Scripts.Game.SimpleScript
@@ -46,6 +47,9 @@ namespace Assets.Scripts.Game.SimpleScript
 
       // Load entity type data
       LoadTypeData();
+
+      //
+      _items = new();
     }
 
     // Get item by id
@@ -55,8 +59,21 @@ namespace Assets.Scripts.Game.SimpleScript
       return items.ContainsKey(id) ? items[id] : null;
     }
 
+    //
+    public static void AddItem(Item item)
+    {
+      var items = s_singleton._items;
+      items[item._ItemData.Id] = item;
+    }
+    public static void RemoveItem(int id)
+    {
+      var items = s_singleton._items;
+      if (items.ContainsKey(id))
+        items.Remove(id);
+    }
+
     // Give entity an item
-    public static Item GiveItem(ScriptEntity entity, int itemId)
+    public static Item GiveItem(ScriptEntity entity, int itemTypeId)
     {
       var storage = entity._Storage;
       if (storage == null)
@@ -69,13 +86,14 @@ namespace Assets.Scripts.Game.SimpleScript
         if (storage[i] != null)
           continue;
 
-        var newItem = new Item(itemId);
-        storage[i] = newItem;
+        var newItem = new Item(itemTypeId);
+        storage[i] = newItem._ItemData;
         entity.OnItemGiven();
 
         return newItem;
       }
 
+      Debug.LogWarning("No empty storage slot found for item!");
       return null;
     }
 
@@ -88,24 +106,24 @@ namespace Assets.Scripts.Game.SimpleScript
     // Load objects from json
     public void LoadTypeData()
     {
-      var functionsByType = _functionRepository.Load(false);
+      _functionRepository.Load(false);
 
       // Load in item type data
       var rawText = System.IO.File.ReadAllText("itemTypeData.json");
-      var jsonData = JsonUtility.FromJson<ItemTypeDataWrapper>(rawText);
+      var jsonData = JsonConvert.DeserializeObject<ItemTypeDataWrapper>(rawText);
       _itemDataWrapper = jsonData;
 
       // Match functions per item type
       for (var i = 0; i < s_itemTypeData.Count; i++)
       {
         var itemTypeData = s_itemTypeData[i];
+        var functionsByType = ScriptEntityHelper.s_FunctionRepository.GetFunctionsByType(itemTypeData.Name.ToLower());
         var functionIds = new List<int>();
-        if (functionsByType.ContainsKey(itemTypeData.Name.ToLower()))
-          foreach (var func in functionsByType[itemTypeData.Name.ToLower()])
-          {
-            var id = _functionRepository.GetFunctionId(func);
-            functionIds.Add(id);
-          }
+        foreach (var func in functionsByType)
+        {
+          var id = _functionRepository.GetFunctionId(func);
+          functionIds.Add(id);
+        }
         var publicFunctionIds = functionIds.ToArray();
         itemTypeData.PublicFunctionIds = publicFunctionIds;
         s_itemTypeData[i] = itemTypeData;
@@ -115,7 +133,10 @@ namespace Assets.Scripts.Game.SimpleScript
     // Save objects to json
     public void SaveTypeData()
     {
-      var jsonData = JsonUtility.ToJson(_itemDataWrapper, true);
+      var jsonData = JsonConvert.SerializeObject(_itemDataWrapper, Formatting.Indented, new JsonSerializerSettings
+      {
+        NullValueHandling = NullValueHandling.Ignore
+      });
       System.IO.File.WriteAllText("itemTypeData.json", jsonData);
     }
 

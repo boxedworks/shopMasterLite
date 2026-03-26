@@ -89,7 +89,8 @@ namespace CustomUI
       if (!string.IsNullOrEmpty(command))
       {
         var hist = s_Singleton._commandHistory;
-        hist.Insert(0, command);
+        if (hist.Count == 0 || hist[0] != command)
+          hist.Insert(0, command);
         if (hist.Count > _commandHistoryMaxCount)
           hist.RemoveAt(hist.Count - 1);
       }
@@ -99,7 +100,7 @@ namespace CustomUI
 
           // Create new player entity
           var playerEntity = new ScriptEntity(0, new Vector3(-20, 0, 0), 0);
-          playerEntity._EntityData.ItemStorage = Enumerable.Repeat<Item>(null, 4).ToList();
+          playerEntity._EntityData.ItemStorage = Enumerable.Repeat<Item.ItemData>(null, 4).ToList();
           playerEntity._ScriptSpawned = false;
 
           UIElements.s_Singleton._EditorPanel.SetNewScript(playerEntity);
@@ -115,6 +116,10 @@ namespace CustomUI
           var selectedEntity = PlayerController.s_Singleton._SelectedEntity;
           if (selectedEntity != null)
             ScriptEntity.DestroyEntity(selectedEntity);
+          break;
+
+        case "save":
+          ScriptEntityHelper.SaveGame();
           break;
 
         default:

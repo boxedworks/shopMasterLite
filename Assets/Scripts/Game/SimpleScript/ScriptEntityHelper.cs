@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using CustomUI;
 using UnityEngine;
+
+using Newtonsoft.Json;
 
 namespace Assets.Scripts.Game.SimpleScript
 {
@@ -23,6 +26,12 @@ namespace Assets.Scripts.Game.SimpleScript
     }
     EntityTypeDataWrapper _entityDataWrapper;
 
+    [System.Serializable]
+    struct EntityDataWrapper
+    {
+      public List<ScriptEntity.EntityData> _EntityData;
+    }
+
     //
     FunctionRepository _functionRepository;
     public static FunctionRepository s_FunctionRepository { get { return s_Singleton._functionRepository; } }
@@ -42,14 +51,14 @@ namespace Assets.Scripts.Game.SimpleScript
       LoadTypeData();
     }
 
-    // Load objects from json
+    // Load type data from json
     public static void LoadTypeData()
     {
-      var functionsByType = s_Singleton._functionRepository.Load(true);
+      s_Singleton._functionRepository.Load(true);
 
       // Load in entity type data
       var rawText = System.IO.File.ReadAllText("entityTypeData.json");
-      var jsonData = JsonUtility.FromJson<EntityTypeDataWrapper>(rawText);
+      var jsonData = JsonConvert.DeserializeObject<EntityTypeDataWrapper>(rawText);
       s_Singleton._entityDataWrapper = jsonData;
 
       // Match functions per entity type
@@ -58,12 +67,12 @@ namespace Assets.Scripts.Game.SimpleScript
         var entityTypeData = s_Singleton._entityTypeData[i];
         var functionIds = new List<int>();
         var entityTypeKey = entityTypeData.Name.ToLower();
-        if (functionsByType.ContainsKey(entityTypeKey))
-          foreach (var func in functionsByType[entityTypeKey])
-          {
-            var id = s_Singleton._functionRepository.GetFunctionId($"{entityTypeKey}.{func}");
-            functionIds.Add(id);
-          }
+        var functionsByType = s_FunctionRepository.GetFunctionsByType(entityTypeKey);
+        foreach (var func in functionsByType)
+        {
+          var id = s_Singleton._functionRepository.GetFunctionId($"{entityTypeKey}.{func}");
+          functionIds.Add(id);
+        }
         if (functionIds.Count > 0)
         {
           var publicFunctionIds = functionIds.ToArray();
@@ -73,11 +82,85 @@ namespace Assets.Scripts.Game.SimpleScript
       }
     }
 
-    // Save objects to json
+    // Save type data to json
     public static void SaveTypeData()
     {
-      var jsonData = JsonUtility.ToJson(s_Singleton._entityDataWrapper, true);
+      var jsonData = JsonConvert.SerializeObject(s_Singleton._entityDataWrapper, Formatting.Indented, new JsonSerializerSettings
+      {
+        NullValueHandling = NullValueHandling.Ignore
+      });
       System.IO.File.WriteAllText("entityTypeData.json", jsonData);
+    }
+
+    // Load game from save data, if no save data, create new game
+    public static void LoadEntityData()
+    {
+      // Check for load data, if none, create new game
+      var hasSaveData = false;
+      if (hasSaveData)
+      {
+
+      }
+
+      // New save data
+      else
+      {
+
+        // Create starting area
+        new ScriptEntity(1, new Vector3(0, 0, -1), -1);
+        new ScriptEntity(2, new Vector3(0, 0, -3), -1);
+        new ScriptEntity(2, new Vector3(2, 0, -2), -1);
+
+        new ScriptEntity(3, new Vector3(3, 0, 0), -1);
+        new ScriptEntity(3, new Vector3(3, 0, -1), -1);
+        new ScriptEntity(3, new Vector3(3, 0, 1), -1);
+        new ScriptEntity(3, new Vector3(3, 0, -2), -1);
+        new ScriptEntity(3, new Vector3(3, 0, 2), -1);
+        new ScriptEntity(3, new Vector3(3, 0, -3), -1);
+        new ScriptEntity(3, new Vector3(3, 0, 3), -1);
+
+        new ScriptEntity(3, new Vector3(-3, 0, 0), -1);
+        new ScriptEntity(3, new Vector3(-3, 0, -1), -1);
+        new ScriptEntity(3, new Vector3(-3, 0, 1), -1);
+        new ScriptEntity(3, new Vector3(-3, 0, -2), -1);
+        new ScriptEntity(3, new Vector3(-3, 0, 2), -1);
+        new ScriptEntity(3, new Vector3(-3, 0, -3), -1);
+        new ScriptEntity(3, new Vector3(-3, 0, 3), -1);
+
+        new ScriptEntity(3, new Vector3(2, 0, -3), -1);
+        new ScriptEntity(3, new Vector3(-2, 0, 3), -1);
+        new ScriptEntity(3, new Vector3(1, 0, -3), -1);
+        new ScriptEntity(3, new Vector3(-1, 0, 3), -1);
+        new ScriptEntity(3, new Vector3(0, 0, 3), -1);
+        new ScriptEntity(3, new Vector3(-2, 0, -3), -1);
+        new ScriptEntity(3, new Vector3(2, 0, 3), -1);
+        new ScriptEntity(3, new Vector3(1, 0, 3), -1);
+        new ScriptEntity(3, new Vector3(-1, 0, -3), -1);
+      }
+    }
+
+    // Save game data
+    public static void SaveGame()
+    {
+      var saveTimeStart = Time.time;
+
+      // Save entities
+      var entityDataWrapper = new EntityDataWrapper
+      {
+        _EntityData = new()
+      };
+      foreach (var entityPair in ScriptEntity.s_ScriptEntities)
+      {
+        entityDataWrapper._EntityData.Add(entityPair.Value._EntityData);
+      }
+
+      var jsonData = JsonConvert.SerializeObject(entityDataWrapper, Formatting.Indented, new JsonSerializerSettings
+      {
+        NullValueHandling = NullValueHandling.Ignore
+      });
+      System.IO.File.WriteAllText("entityData.json", jsonData);
+
+      Terminal.s_Singleton.LogMessage($"Game saved in {Time.time - saveTimeStart:0.00} seconds");
     }
 
     //

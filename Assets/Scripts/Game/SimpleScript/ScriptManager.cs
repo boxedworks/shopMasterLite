@@ -161,6 +161,8 @@ namespace Assets.Scripts.Game.SimpleScript
     public class ScriptBase
     {
       public int _Id, _OwnerId;
+      string _name;
+      public string _Name { get { return _name; } set { _name = value; } }
       string _codeRaw;
       public string _CodeRaw { get { return _codeRaw; } }
       bool _isEnabled, _breakLoop;
@@ -1756,7 +1758,7 @@ namespace Assets.Scripts.Game.SimpleScript
       {
 
         // Log
-        var errorString = $"Line [{_lineIndex}]: [{_lineOriginal}] [{error}]";
+        var errorString = $"{_Name ?? "custom script"} [{_lineIndex}]: [{_lineOriginal}] [{error}]";
         Debug.LogError(errorString);
         _attachedEntity.AppendLog($"<color=red>{errorString}</color>");
 
@@ -2123,7 +2125,7 @@ namespace Assets.Scripts.Game.SimpleScript
               Item item = null;
               if (items != null && itemSlot < items.Count)
               {
-                item = items[itemSlot];
+                item = ItemManager.GetItem(items[itemSlot].Id);
               }
               if (item == null)
               {

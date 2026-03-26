@@ -9,7 +9,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
     // Saveable data for items
     [System.Serializable]
-    public struct ItemData
+    public class ItemData
     {
 
       // Unique Id of item
@@ -20,7 +20,7 @@ namespace Assets.Scripts.Game.SimpleScript
       public int TypeId;
 
       // Item storage
-      public Dictionary<int, int> ItemStorage;
+      //public Dictionary<int, int> ItemStorage;
 
       // Holds item's variables that can be referenced in scripts
       public Dictionary<string, object> ItemAttributes;
@@ -57,6 +57,14 @@ namespace Assets.Scripts.Game.SimpleScript
         Id = ItemData.s_Id++,
         TypeId = typeId
       };
+
+      ItemManager.AddItem(this);
+    }
+
+    //
+    public void Destroy()
+    {
+      ItemManager.RemoveItem(_ItemData.Id);
     }
 
     //

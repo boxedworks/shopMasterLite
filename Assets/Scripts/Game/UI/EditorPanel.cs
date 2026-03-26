@@ -18,6 +18,7 @@ namespace CustomUI
     Button _buttonNew { get { return _taskbar.GetChild(0).GetComponent<Button>(); } }
     Button _buttonRun { get { return _taskbar.GetChild(1).GetComponent<Button>(); } }
 
+    RectTransform _currentLineBar;
     TMPro.TextMeshProUGUI _lineNumberText;
     TMPro.TMP_InputField _displayText, _inputField;
 
@@ -26,7 +27,7 @@ namespace CustomUI
 
     public bool _IsFocused { get { return EventSystem.current.currentSelectedGameObject == _inputField.gameObject; } }
 
-    int _lineIndex;
+    int _lineIndex, _lastCaretPosition;
     bool _hasError;
 
     bool _isNewScript;
@@ -35,9 +36,10 @@ namespace CustomUI
     {
       _panel = GameObject.Find("Editor").transform;
 
-      _displayText = _body.GetChild(0).GetChild(0).GetComponent<TMPro.TMP_InputField>();
-      _lineNumberText = _body.GetChild(0).GetChild(1).GetComponent<TMPro.TextMeshProUGUI>();
-      _inputField = _body.GetChild(0).GetChild(2).GetComponent<TMPro.TMP_InputField>();
+      _currentLineBar = _body.GetChild(0).GetChild(0).GetComponent<RectTransform>();
+      _displayText = _body.GetChild(0).GetChild(1).GetComponent<TMPro.TMP_InputField>();
+      _lineNumberText = _body.GetChild(0).GetChild(2).GetComponent<TMPro.TextMeshProUGUI>();
+      _inputField = _body.GetChild(0).GetChild(3).GetComponent<TMPro.TMP_InputField>();
 
       _displayText.textComponent.textWrappingMode = _inputField.textComponent.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
 
@@ -96,14 +98,23 @@ namespace CustomUI
       // Try to attach script if not attached to selected entity
       else
       {
-        var selectedEntity = _attachedEntity != null ? _attachedEntity : PlayerController.s_Singleton._SelectedEntity;
+        var selectedEntity = _attachedEntity ?? PlayerController.s_Singleton._SelectedEntity;
         if (selectedEntity != null)
         {
           if (selectedEntity._AttachedScripts != null)
           {
             var newScript = selectedEntity._AttachedScripts[0];
             AttachScript(newScript);
+            return;
           }
+        }
+
+        // Check for caret position change
+        var caretPositionChanged = _lastCaretPosition != _inputField.caretPosition;
+        if (caretPositionChanged)
+        {
+          _lastCaretPosition = _inputField.caretPosition;
+          UpdateUI();
         }
       }
 
@@ -111,6 +122,7 @@ namespace CustomUI
 
     void UpdateUI(string formatText = null)
     {
+      var lineIndex = _attachedScript != null ? _lineIndex : GetLineNumberFromCharIndex(_inputField.caretPosition + 1) + 1;
       if (formatText == null)
       {
         formatText = _inputField.text;
@@ -125,10 +137,12 @@ namespace CustomUI
       for (var i = 0; i < numLines; i++)
       {
         var lineNumberText_ = (i + 1).ToString();
-        if (i == _lineIndex - 1)
+        if (i == lineIndex - 1)
         {
-          var lineNumberTextColor = _attachedScript._HasError ? "red" : "lightblue";
+          var lineNumberTextColor = (_attachedScript?._HasError ?? false) ? "red" : "lightblue";
           lineNumberText_ = $"<color={lineNumberTextColor}>{lineNumberText_}</color>";
+
+          UpdateLineBar(lineIndex - 1, _attachedScript?._HasError ?? false);
         }
         lineNumberText += $"{lineNumberText_}\n";
       }
@@ -151,6 +165,32 @@ namespace CustomUI
       formatText = commentRegex.Replace(formatText, $"<color={commentColor}>$1</color>");
 
       _displayText.text = formatText;
+    }
+
+    //
+    void UpdateLineBar(int lineIndex, bool hasError)
+    {
+      var lineBarBase = -12.3f;
+      _currentLineBar.anchoredPosition = new Vector2(_currentLineBar.anchoredPosition.x, lineBarBase - lineIndex * 20f);
+
+      var lineBarColor = hasError ? new Color(1f, 0f, 0f, 0.04313726f) : new Color(0.3490566f, 0.3490566f, 0.3490566f, 0.09803922f);
+      _currentLineBar.GetComponent<Image>().color = lineBarColor;
+    }
+
+
+    // Iterate through lines to find which line contains the charIndex
+    private int GetLineNumberFromCharIndex(int charIndex)
+    {
+      var textInfo = _inputField.textComponent.textInfo;
+      for (var i = 0; i < textInfo.lineCount; i++)
+      {
+        var lineInfo = textInfo.lineInfo[i];
+        if (charIndex >= lineInfo.firstCharacterIndex && charIndex <= lineInfo.lastCharacterIndex + 1)
+        {
+          return i;
+        }
+      }
+      return 0;
     }
 
     //
