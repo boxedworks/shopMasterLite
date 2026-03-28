@@ -84,6 +84,7 @@ namespace CustomUI
     public static void HandleCommand(string command)
     {
       command = command.Trim();
+      s_Singleton.LogMessage($"> {command}");
 
       // Record non-empty commands in history
       if (!string.IsNullOrEmpty(command))
@@ -98,12 +99,7 @@ namespace CustomUI
       {
         case "script new":
 
-          // Create new player entity
-          var playerEntity = new ScriptEntity(0, new Vector3(-20, 0, 0), 0);
-          playerEntity._EntityData.ItemStorage = Enumerable.Repeat<Item.ItemData>(null, 4).ToList();
-          playerEntity._ScriptSpawned = false;
-
-          UIElements.s_Singleton._EditorPanel.SetNewScript(playerEntity);
+          UIElements.s_Singleton._EditorPanel.CreateNewPlayerScript();
           break;
 
         case "script run":
@@ -115,7 +111,10 @@ namespace CustomUI
 
           var selectedEntity = PlayerController.s_Singleton._SelectedEntity;
           if (selectedEntity != null)
+          {
             ScriptEntity.DestroyEntity(selectedEntity);
+            StatusPanel.StatusPanelManager.TryDestroyStatusForEntity_S(selectedEntity);
+          }
           break;
 
         case "save":
@@ -126,7 +125,33 @@ namespace CustomUI
           break;
 
         default:
-          s_Singleton.LogMessage($"<color=red>Unknown command: {command}</color>");
+
+          // Complex command
+          if (command.StartsWith("generate map"))
+          {
+
+            var commandParams = command.Split(' ').Skip(2).ToArray();
+            if (commandParams.Length != 0 && commandParams.Length != 1 && commandParams.Length != 3)
+            {
+              s_Singleton.LogMessage($"<color=red>Invalid command format. Usage: generate map [sizeX] [sizeZ] [noiseScale]</color>");
+              return;
+            }
+
+            ScriptEntityHelper.GenerateMap(new ScriptEntityHelper.NoiseSettings
+            {
+              XOffset = commandParams.Length == 3 ? int.Parse(commandParams[0]) : Random.Range(0f, 100f),
+              ZOffset = commandParams.Length == 3 ? int.Parse(commandParams[1]) : Random.Range(0f, 100f),
+              NoiseScale = commandParams.Length == 3 ? float.Parse(commandParams[2]) : (commandParams.Length == 1 ? float.Parse(commandParams[0]) : 0.1f)
+            });
+
+          }
+
+          else
+          {
+            s_Singleton.LogMessage($"<color=red>Unknown command: {command}</color>");
+            return;
+          }
+
           break;
       }
     }

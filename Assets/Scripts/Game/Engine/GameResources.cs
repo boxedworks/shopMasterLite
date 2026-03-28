@@ -16,5 +16,15 @@ public class GameResources
     _mainCamera = Camera.main;
   }
 
+  //
+  public static Sprite LoadSprite(string path)
+  {
+    return Resources.Load<Sprite>($"Images/{path}");
+  }
+  public static Sprite LoadItemSprite(string path)
+  {
+    return LoadSprite($"items/{path}");
+  }
+
 
 }

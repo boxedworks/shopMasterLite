@@ -25,8 +25,6 @@ public class GameController : MonoBehaviour
     // Initizalize other systems
     new Terminal();
 
-    ScriptEntityHelper.SaveTypeData();
-
     _lastTick = Time.time;
     s_CurrentTick = 1;
 
@@ -56,6 +54,7 @@ public class GameController : MonoBehaviour
 
     // Update entities
     ScriptEntity.UpdateScriptEntities();
+    ItemManager.Update();
 
     // Update player
     PlayerController.s_Singleton.Update();

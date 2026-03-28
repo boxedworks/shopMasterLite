@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Xml.Serialization;
 using Assets.Scripts.Game.SimpleScript;
 using UnityEngine;
 using UnityEngine.UI;
@@ -67,6 +68,12 @@ namespace CustomUI
         s_Singleton.TryCreateStatusForEntity(entity);
       }
 
+      public static void TryDestroyStatusForEntity_S(ScriptEntity entity)
+      {
+        if (s_Singleton._openStatusPanels.ContainsKey(entity._EntityData.Id))
+          s_Singleton._openStatusPanels[entity._EntityData.Id].CloseButtonAction();
+      }
+
       // Replace status panel with new one
       void UpdateStatusUI(ScriptEntity entity, SubPanelType subPanelKey)
       {
@@ -110,7 +117,7 @@ namespace CustomUI
 
       // Create status panel
       var statusBase = UIElements.s_Singleton._StatusPanel;
-      _panel = GameObject.Instantiate(statusBase, statusBase.transform.parent).transform as RectTransform;
+      _panel = Object.Instantiate(statusBase, statusBase.transform.parent).transform as RectTransform;
       var body = _panel.GetChild(1);
 
       _openSubPanels = new();
@@ -160,7 +167,7 @@ namespace CustomUI
         button.name = $"{subPanelType}";
 
         var icon = button.transform.GetChild(0).GetComponent<Image>();
-        var loadedSprite = Resources.Load<Sprite>($"Images/UI/{iconName}");
+        var loadedSprite = GameResources.LoadSprite($"UI/{iconName}");
         icon.sprite = loadedSprite;
 
         var buttonComponent = button.AddComponent<Button>();
@@ -285,7 +292,7 @@ namespace CustomUI
         sprite.transform.SetParent(itemSlot.transform, false);
 
         var item = ItemManager.GetItem(itemData.Id);
-        var loadedSprite = Resources.Load<Sprite>($"Images/items/{item._ItemTypeData.Name.ToLower()}");
+        var loadedSprite = GameResources.LoadItemSprite($"{item._ItemTypeData.Name.ToLower()}");
         sprite.sprite = loadedSprite;
 
         // Set button action
@@ -388,6 +395,7 @@ namespace CustomUI
             if (newScript == null)
               return;
 
+            UIElements.s_Singleton._EditorPanel.AttachScript(newScript);
             UpdateScriptsPanel();
           });
         }
@@ -424,10 +432,14 @@ namespace CustomUI
 
           var script = _entity._AttachedScripts[i];
           string scriptStatus;
-          if (script._IsValid)
-            scriptStatus = "<color=blue>Running</color>";
-          else if (script._HasError)
+          if (script._HasError)
             scriptStatus = "<color=red>Error</color>";
+          else if (!script._IsEnabled)
+            scriptStatus = "Disabled";
+          else if (script._IsWaitingFor)
+            scriptStatus = "<color=orange>Waiting</color>";
+          else if (script._IsValid)
+            scriptStatus = "<color=blue>Running</color>";
           else
             scriptStatus = "Exited";
           var scriptName = script._Name ?? $"Custom script";
@@ -438,7 +450,12 @@ namespace CustomUI
           if (_entity._IsPlayer)
             scriptButton.onClick.AddListener(() =>
             {
-              _entity.Destroy();
+              if (script._IsEnabled)
+                script.Disable();
+              else
+                ScriptManager.RemoveScript(script);
+
+              UpdateScriptsPanel();
             });
         }
       }

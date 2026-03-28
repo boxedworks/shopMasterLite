@@ -143,6 +143,10 @@ namespace CustomUI
       {
         _EditorPanel.AttachScript(entity._AttachedScripts[0]);
       }
+      else
+      {
+        //_EditorPanel.DetachScript();
+      }
     }
 
     //

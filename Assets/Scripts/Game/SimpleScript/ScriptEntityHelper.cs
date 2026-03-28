@@ -154,6 +154,8 @@ namespace Assets.Scripts.Game.SimpleScript
         new ScriptEntity(3, new Vector3(2, 0, 3), -1);
         new ScriptEntity(3, new Vector3(1, 0, 3), -1);
         new ScriptEntity(3, new Vector3(-1, 0, -3), -1);
+
+        //Terminal.HandleCommand("generate map");
       }
     }
 
@@ -208,6 +210,67 @@ namespace Assets.Scripts.Game.SimpleScript
       var entityKey = entity._EntityTypeData.Name.ToLower();
       var functionTypeData = s_Singleton._functionRepository.GetFunctionData($"{entityKey}.{functionName}");
       return functionTypeData.ParameterCount;
+    }
+
+    //
+    public static void DestroyAllEntities()
+    {
+      var entities = ScriptEntity.s_ScriptEntities.Values.ToList();
+      foreach (var entity in entities)
+      {
+        entity.Destroy();
+      }
+    }
+
+    //
+    public struct NoiseSettings
+    {
+      public float XOffset;
+      public float ZOffset;
+      public float NoiseScale;
+    }
+    public static void GenerateMap(NoiseSettings noiseSettings)
+    {
+      DestroyAllEntities();
+
+      var mapSizeX = 7;
+      var mapSizeZ = 7;
+      GameObject.Find("Floor").transform.localScale = new Vector3(mapSizeX, 1, mapSizeZ);
+      for (var x = 0; x < mapSizeX; x++)
+      {
+        for (var z = 0; z < mapSizeZ; z++)
+        {
+          var x_ = -mapSizeX / 2 + x;
+          var z_ = -mapSizeZ / 2 + z;
+
+          var noise = Mathf.PerlinNoise(
+            (x + noiseSettings.XOffset) * noiseSettings.NoiseScale,
+            (z + noiseSettings.ZOffset) * noiseSettings.NoiseScale);
+          noise = Mathf.Pow(noise, 2f);
+
+          var entityType = -1;
+          if (noise < 0.01f)
+          {
+            entityType = 2;
+          }
+          else if (noise < 0.5f)
+          {
+          }
+          else if (noise < 0.52f)
+          {
+            entityType = 2;
+          }
+          else
+          {
+            entityType = 3;
+          }
+
+          Debug.Log($"Noise for {x_}, {z_}: {noise} .. entity type: {entityType}");
+
+          if (entityType != -1)
+            new ScriptEntity(entityType, new Vector3(x_, 0, z_), -1);
+        }
+      }
     }
   }
 }

@@ -66,20 +66,31 @@ namespace CustomUI
       var inputFieldText = _inputField.textComponent.transform as RectTransform;
       displayTextText.localPosition = inputFieldText.localPosition;
 
+      var selectedEntity = PlayerController.s_Singleton._SelectedEntity ?? _attachedEntity;
+
       // Update editor using attached script
       if (_attachedScript != null)
       {
 
-        // If current script invalid, check for new script
-        if (!_attachedScript._IsValid)
+        if (_attachedEntity._AttachedScripts != null)
         {
-          if (_attachedEntity._AttachedScripts != null)
+
+          if (_attachedScript._Id != (selectedEntity?._AttachedScripts?[0]._Id ?? _attachedScript._Id))
           {
-            var newScript = _attachedEntity._AttachedScripts[0];
-            if (newScript._IsValid)
+            AttachScript(selectedEntity._AttachedScripts[0]);
+            return;
+          }
+
+          // If current script invalid, check for new script
+          if (!_attachedScript._IsValid)
+          {
             {
-              AttachScript(newScript);
-              return;
+              var newScript = _attachedEntity._AttachedScripts[0];
+              if (newScript._IsValid)
+              {
+                AttachScript(newScript);
+                return;
+              }
             }
           }
         }
@@ -98,7 +109,6 @@ namespace CustomUI
       // Try to attach script if not attached to selected entity
       else
       {
-        var selectedEntity = _attachedEntity ?? PlayerController.s_Singleton._SelectedEntity;
         if (selectedEntity != null)
         {
           if (selectedEntity._AttachedScripts != null)
@@ -205,23 +215,28 @@ namespace CustomUI
       _lineIndex = script._LineIndex;
       _hasError = _attachedScript._HasError;
 
+      Debug.Log($"Attached script [{_attachedScript._Id}] to editor panel");
       _inputField.text = script._CodeRaw;
       UpdateUI();
+      SetButtonRunActive(false);
     }
 
     //
-    public void SetNewScript(ScriptEntity entity)
+    public void CreateNewPlayerScript()
     {
-      OnAttachScript(entity);
+      // Create new player entity
+      var playerEntity = new ScriptEntity(0, new Vector3(-20, 0, 0), 0);
+      playerEntity._EntityData.ItemStorage = Enumerable.Repeat<Item.ItemData>(null, 4).ToList();
+      playerEntity._ScriptSpawned = false;
+
+      OnAttachScript(playerEntity);
 
       _isNewScript = true;
 
       _attachedScript = null;
-      _attachedEntity = entity;
+      _attachedEntity = playerEntity;
       _lineIndex = 0;
       _hasError = false;
-
-      _inputField.text = "";
 
       UpdateUI();
     }
@@ -234,6 +249,7 @@ namespace CustomUI
         var newScript = _attachedEntity.LoadAndAttachRawScript(_inputField.text);
         if (newScript == null)
           return;
+        _attachedScript = newScript;
 
         SetButtonRunActive(false);
       }
@@ -256,6 +272,18 @@ namespace CustomUI
     }
 
     //
+    void OnScriptRemoved(int scriptId)
+    {
+      if (_attachedScript._Id == scriptId)
+      {
+        _attachedScript = null;
+        _hasError = false;
+
+        UpdateUI();
+      }
+    }
+
+    //
     void SetButtonRunActive(bool active)
     {
       _buttonRun.onClick.RemoveAllListeners();
@@ -263,6 +291,12 @@ namespace CustomUI
         _buttonRun.onClick.AddListener(() =>
         {
           RunNewScript();
+        });
+      else
+        _buttonRun.onClick.AddListener(() =>
+        {
+          if (!_attachedScript._IsEnabled)
+            _attachedScript.Enable();
         });
     }
 

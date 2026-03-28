@@ -34,7 +34,7 @@ namespace Assets.Scripts.Game.SimpleScript
         {
           name = spritePath
         };
-        var sprite = Resources.Load<Sprite>($"Images/{spritePath}");
+        var sprite = GameResources.LoadSprite(spritePath);
         material.SetTexture("_BaseMap", sprite.texture);
 
         materialsByName.Add(spritePath, material);

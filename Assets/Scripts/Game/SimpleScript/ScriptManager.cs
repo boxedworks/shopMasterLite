@@ -77,7 +77,12 @@ namespace Assets.Scripts.Game.SimpleScript
     {
       // Delete script
       var script = s_Singleton._scripts[scriptId];
-      script.RemoveScript();
+      if (!script._IsValid)
+      {
+        Debug.LogWarning($"Trying to remove invalid script[{scriptId}]!");
+        return;
+      }
+      script.OnRemoveScript();
       s_Singleton._scripts.Remove(scriptId);
 
       // Check for parent scripts
@@ -85,7 +90,7 @@ namespace Assets.Scripts.Game.SimpleScript
       if (parentScript != null)
       {
         parentScript._ExternalReturnData = returnData;
-        parentScript.Enable();
+        parentScript.StopWaitingFor();
         var forceTick = returnData?.StartsWith("!E") ?? false;
         parentScript.Tick(forceTick);
       }
@@ -165,7 +170,9 @@ namespace Assets.Scripts.Game.SimpleScript
       public string _Name { get { return _name; } set { _name = value; } }
       string _codeRaw;
       public string _CodeRaw { get { return _codeRaw; } }
-      bool _isEnabled, _breakLoop;
+      public bool _IsEnabled { get { return _isEnabled; } }
+      public bool _IsWaitingFor { get { return _isWaitingFor; } }
+      bool _isEnabled, _breakLoop, _isWaitingFor;
       int _tickCooldown;
       public void Enable()
       {
@@ -186,6 +193,16 @@ namespace Assets.Scripts.Game.SimpleScript
         _isEnabled = false;
       }
 
+      public void StopWaitingFor()
+      {
+        if (!_isWaitingFor)
+        {
+          Debug.LogWarning($"Script [{_Id}] is not waiting for anything!");
+        }
+
+        _isWaitingFor = false;
+      }
+
       //
       bool _isValid;
       public bool _IsValid { get { return _isValid; } }
@@ -194,14 +211,17 @@ namespace Assets.Scripts.Game.SimpleScript
       {
         _removeScriptOnExit = true;
       }
-      public void RemoveScript()
+      public void OnRemoveScript()
       {
+        _attachedEntity.DetachScript(this);
+
         _isValid = false;
 
         // Check destroy
         if (_removeScriptOnExit)
         {
           _attachedEntity.Destroy();
+
         }
       }
 
@@ -312,7 +332,7 @@ namespace Assets.Scripts.Game.SimpleScript
         //Debug.Log($"Attempting to tick script: {_attachedEntity._EntityTypeData.Name}");
 
         // Check can tick
-        if (!_isEnabled || !_isValid) return;
+        if (!_isEnabled || !_isValid || _isWaitingFor) return;
         if (!_attachedEntity._CanTick) return;
 
         var currentTick = GameController.s_CurrentTick;
@@ -1519,14 +1539,15 @@ namespace Assets.Scripts.Game.SimpleScript
                     validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z - 1));
                     break;
                   case 2:
-                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x + 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
+                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x - 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
                     break;
                   case 3:
-                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x - 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
+                    validFacing = targetPosition.Equals((_attachedEntity._TilePosition.x + 1, _attachedEntity._TilePosition.y, _attachedEntity._TilePosition.z));
                     break;
                 }
                 if (!validFacing)
                 {
+                  //Debug.LogError($"Not facing target: {targetPosition} .. entity position: {_attachedEntity._TilePosition} .. direction: {direction}");
                   logError($"Not facing target");
                   break;
                 }
@@ -1562,7 +1583,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
                 // Wait for script to complete
                 _breakLoop = true;
-                _isEnabled = false;
+                _isWaitingFor = true;
 
                 // Tick script now!
                 entityScript.Tick();
@@ -1604,7 +1625,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
                 // Wait for script to complete
                 _breakLoop = true;
-                _isEnabled = false;
+                _isWaitingFor = true;
 
                 // Tick script now!
                 itemScript.Tick();
@@ -1767,7 +1788,7 @@ namespace Assets.Scripts.Game.SimpleScript
         // Exit loop and remove script
         _breakLoop = true;
         _error = error;
-        ScriptManager.RemoveScript(this, $"!E {error}");
+        RemoveScript(this, $"!E {error}");
       }
 
     }
@@ -1998,7 +2019,19 @@ namespace Assets.Scripts.Game.SimpleScript
                 var position_x = parameters[1];
                 var position_y = parameters[2];
                 var position_z = parameters[3];
-                entity.TryMove((int.Parse(position_x), int.Parse(position_y), int.Parse(position_z)), true);
+                var solidCheck = true;
+                var animate = true;
+
+                var success = entity.TryMove(
+                  (int.Parse(position_x), int.Parse(position_y), int.Parse(position_z)),
+                  solidCheck,
+                  animate
+                );
+
+                if (!success)
+                {
+                  return SystemFunctionReturnData.Custom("Failed to move entity; target position may be blocked");
+                }
 
                 return SystemFunctionReturnData.Success(0);
 
@@ -2212,9 +2245,12 @@ namespace Assets.Scripts.Game.SimpleScript
           {
             return SystemFunctionReturnData.Custom("Inventory full");
           }
-          Terminal.s_Singleton.LogMessage($"Gave item ID {item._ItemTypeData.Name} to entity ID {entityData}");
+
+          // Create visual indicator for the given item
+          ItemManager.s_ItemVisualIndicatorManager.CreateIndicator(entity, item._ItemTypeData, script._AttachedEntity._TilePositionVector3);
 
           //
+          Terminal.s_Singleton.LogMessage($"Gave item ID {item._ItemTypeData.Name} to entity ID {entityData}");
           return SystemFunctionReturnData.Success(0);
         }
       );

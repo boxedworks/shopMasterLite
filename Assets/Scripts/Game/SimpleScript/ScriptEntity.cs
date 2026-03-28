@@ -187,9 +187,11 @@ namespace Assets.Scripts.Game.SimpleScript
 
       // Remove any scripts on the entity
       if (_attachedScripts != null)
-        foreach (var script in _attachedScripts)
-          if (script._IsValid)
-            ScriptManager.RemoveScript(script);
+        for (var i = _attachedScripts.Count - 1; i >= 0; i--)
+        {
+          var script = _attachedScripts[i];
+          ScriptManager.RemoveScript(script);
+        }
 
       // Destroy any objects
       if (_HasStorage)
@@ -362,7 +364,7 @@ namespace Assets.Scripts.Game.SimpleScript
       else
       {
         var spriteRenderer = _sprite.GetComponent<SpriteRenderer>();
-        var sprite = Resources.Load<Sprite>($"Images/{spritePath}");
+        var sprite = GameResources.LoadSprite(spritePath);
         if (sprite == null)
         {
           Debug.LogWarning($"Failed to load sprite at path: Images/{spritePath}");
@@ -769,6 +771,7 @@ namespace Assets.Scripts.Game.SimpleScript
           var attachedScript = _attachedScripts[i];
           if (!attachedScript._IsValid)
           {
+            Debug.LogWarning($"Removing invalid script [{attachedScript._Id}] from entity[{_EntityData.Id}]!");
             _attachedScripts.RemoveAt(i);
           }
         }
