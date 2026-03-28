@@ -4,6 +4,7 @@ using CustomUI;
 using UnityEngine;
 
 using Newtonsoft.Json;
+using System.IO;
 
 namespace Assets.Scripts.Game.SimpleScript
 {
@@ -89,17 +90,34 @@ namespace Assets.Scripts.Game.SimpleScript
       {
         NullValueHandling = NullValueHandling.Ignore
       });
-      System.IO.File.WriteAllText("entityTypeData.json", jsonData);
+      File.WriteAllText("entityTypeData.json", jsonData);
     }
 
     // Load game from save data, if no save data, create new game
     public static void LoadEntityData()
     {
+      var entityDataFilePath = "entityData.json";
+
       // Check for load data, if none, create new game
-      var hasSaveData = false;
+      var hasSaveData = File.Exists(entityDataFilePath);
       if (hasSaveData)
       {
+        var rawText = File.ReadAllText(entityDataFilePath);
+        var jsonData = JsonConvert.DeserializeObject<EntityDataWrapper>(rawText);
+        var entityDataWrapper = jsonData;
+        foreach (var entityData in entityDataWrapper._EntityData)
+        {
+          var entity = new ScriptEntity(entityData);
 
+          // Load items
+
+          if (entity._HasStorage)
+            foreach (var itemData in entity._Storage)
+            {
+              if (itemData != null)
+                new Item(itemData);
+            }
+        }
       }
 
       // New save data
@@ -145,6 +163,7 @@ namespace Assets.Scripts.Game.SimpleScript
       var saveTimeStart = Time.time;
 
       // Save entities
+      var entityDataFilePath = "entityData.json";
       var entityDataWrapper = new EntityDataWrapper
       {
         _EntityData = new()
@@ -158,7 +177,7 @@ namespace Assets.Scripts.Game.SimpleScript
       {
         NullValueHandling = NullValueHandling.Ignore
       });
-      System.IO.File.WriteAllText("entityData.json", jsonData);
+      File.WriteAllText(entityDataFilePath, jsonData);
 
       Terminal.s_Singleton.LogMessage($"Game saved in {Time.time - saveTimeStart:0.00} seconds");
     }

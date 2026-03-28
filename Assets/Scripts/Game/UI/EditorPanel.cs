@@ -150,7 +150,7 @@ namespace CustomUI
 
       // Try to format text
       var objectColor = "yellow";
-      var methodRegex = new System.Text.RegularExpressions.Regex(@"\b((var)|(if)|(else)|(end)|(while)|(for)|(continue)|(break))\b");
+      var methodRegex = new System.Text.RegularExpressions.Regex(@"\b((var)|(if)|(else)|(end)|(while)|(for)|(continue)|(break)|(waitFor))\b");
       formatText = methodRegex.Replace(formatText, $"<color={objectColor}>$1</color>");
 
       methodRegex = new System.Text.RegularExpressions.Regex(@";");

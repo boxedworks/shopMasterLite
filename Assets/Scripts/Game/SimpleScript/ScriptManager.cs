@@ -1334,8 +1334,10 @@ namespace Assets.Scripts.Game.SimpleScript
               // Validate
               if (!(validAccessors?.Contains(word) ?? false))
               {
-                logError($"Null object reference [{accessorLastSave}] => [{word}]");
-                break;
+                returnStatement = "null";
+                continue;
+                //logError($"Null object reference [{accessorLastSave}] => [{word}]");
+                //break;
               }
 
               break;
@@ -1479,7 +1481,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
               // Check spawned
               if (!_attachedEntity._ScriptSpawned)
-                if (!(isSystemFunction && (functionName == "spawn" || functionName == "exit" || accessorLastSave == "_")))
+                if (!(isSystemFunction && (functionName == "spawn" || functionName == "exit" || functionName == "log" || accessorLastSave == "_")))
                 {
                   logError($"Entity cannot perform actions before spawning");
                   _attachedEntity.Destroy();

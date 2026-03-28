@@ -121,6 +121,9 @@ namespace CustomUI
         case "save":
           ScriptEntityHelper.SaveGame();
           break;
+        case "load":
+          ScriptEntityHelper.LoadEntityData();
+          break;
 
         default:
           s_Singleton.LogMessage($"<color=red>Unknown command: {command}</color>");

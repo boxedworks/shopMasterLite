@@ -61,6 +61,15 @@ namespace Assets.Scripts.Game.SimpleScript
       ItemManager.AddItem(this);
     }
 
+    // Load item off of itemdata
+    public Item(ItemData itemData)
+    {
+      _ItemData = itemData;
+      if (itemData.Id >= ItemData.s_Id)
+        ItemData.s_Id = itemData.Id + 1;
+      ItemManager.AddItem(this);
+    }
+
     //
     public void Destroy()
     {

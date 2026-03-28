@@ -121,6 +121,25 @@ namespace Assets.Scripts.Game.SimpleScript
           });
           break;
       }
+
+      Init();
+    }
+
+    // Initialize a script entity using loaded entity data
+    public ScriptEntity(EntityData entityData)
+    {
+      // Create network data
+      _EntityData = entityData;
+      if (_EntityData.Id >= s_ScriptEntityId)
+        s_ScriptEntityId = _EntityData.Id + 1;
+      AddScriptEntity(this);
+
+      Init();
+    }
+
+    //
+    void Init()
+    {
       InitializeEntityVariables();
 
       // Set up model
@@ -150,24 +169,6 @@ namespace Assets.Scripts.Game.SimpleScript
 
       //
       _scriptSpawned = true;
-    }
-
-    // Initialize a script entity using loaded entity data
-    public ScriptEntity(EntityData entityData)
-    {
-      // Create network data
-      _EntityData = entityData;
-      if (_EntityData.Id >= s_ScriptEntityId)
-        s_ScriptEntityId = _EntityData.Id + 1;
-      AddScriptEntity(this);
-      InitializeEntityVariables();
-
-      // Set up model
-      SetupModel();
-
-      // Set position
-      TryMove(_TilePosition, false, false);
-      TrySetDirection(_Direction);
     }
 
     // Remove entity
