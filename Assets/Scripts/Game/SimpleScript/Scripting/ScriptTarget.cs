@@ -69,6 +69,23 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
       _item = item;
       _targetType = TargetType.ITEM;
     }
+
+    //
+    public override string ToString()
+    {
+      return _IsScriptEntity ? _scriptEntity.ToString() : _item.ToString();
+    }
+
+    //
+    public static ScriptTarget TryGetScriptTarget(string targetString)
+    {
+
+      if (ScriptEntityHelper.IsValidVariableEntity(targetString))
+        return new ScriptTarget(ScriptEntityHelper.GetEntityByStatement(targetString));
+      else if (ScriptEntityHelper.IsValidVariableItem(targetString))
+        return new ScriptTarget(ScriptEntityHelper.GetItemByStatement(targetString));
+      return null;
+    }
   }
 
 }

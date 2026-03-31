@@ -86,7 +86,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
         return;
       }
       script.OnRemoveScript();
-      RemoveScript(scriptId);
+      s_Singleton._scripts.Remove(scriptId);
 
       // Check for parent scripts
       var parentScript = script._ParentScript;

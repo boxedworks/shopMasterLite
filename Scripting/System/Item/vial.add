@@ -1,0 +1,13 @@
+$SetNumParams(1)
+
+var items = this.items
+if(items.count > items.size)
+  log("There's no more room in the vial!")
+  exit(5)
+end
+
+var addingItem = _param0
+_giveItem(this, addingItem)
+log("You add {addingItem} to the vial")
+
+exit()

@@ -213,7 +213,7 @@ namespace Assets.Scripts.Game.UI
         sprite.transform.SetParent(itemSlot.transform, false);
 
         var item = ScriptItemController.GetItem(itemData.Id);
-        var loadedSprite = GameResources.LoadItemSprite($"{item._ItemTypeData.Name.ToLower()}");
+        var loadedSprite = GameResources.LoadItemSprite(item._SpriteName);
         sprite.sprite = loadedSprite;
 
         // Set button action

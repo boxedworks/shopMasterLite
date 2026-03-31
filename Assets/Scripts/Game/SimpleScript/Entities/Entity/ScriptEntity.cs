@@ -626,8 +626,10 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
       StatusPanelController.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Inventory);
     }
 
-    public class ItemStorage
+    //
+    public override string ToString()
     {
+      return $"Entity[{_EntityTypeData.Name}]";
     }
   }
 }

@@ -42,9 +42,9 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
             indicatorTransform.rotation = lookAt;
             indicatorTransform.localRotation = Quaternion.Euler(indicatorTransform.localRotation.eulerAngles.x, GameResources._MainCamera.transform.localRotation.eulerAngles.y + 180f, indicatorTransform.localRotation.eulerAngles.z);
 
-            indicator._IndicatorObject.transform.position = Vector3.Lerp(indicator._SpawnPosition, indicator._Entity._TilePositionVector3, elapsedTime / duration);
+            indicator._IndicatorObject.transform.position = Vector3.Lerp(indicator._SpawnPosition, indicator._Entity._Sprite.position, elapsedTime / duration);
 
-            var position = Vector3.Lerp(indicator._SpawnPosition, indicator._Entity._TilePositionVector3, elapsedTime / duration);
+            var position = Vector3.Lerp(indicator._SpawnPosition, indicator._Entity._Sprite.position, elapsedTime / duration);
             var jumpHeight = 0.5f;
             position.y += Mathf.Sin(elapsedTime / duration * Mathf.PI) * jumpHeight;
             indicator._IndicatorObject.transform.position = position;
@@ -53,11 +53,11 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
       }
     }
 
-    public void CreateIndicator(ScriptEntity forEntity, ScriptItemTypeData itemType, Vector3 spawnPosition)
+    public void CreateIndicator(ScriptEntity forEntity, ScriptItem item, Vector3 spawnPosition)
     {
       // Create visual indicator object and set properties based on item type
-      var itemSprite = GameResources.LoadItemSprite($"{itemType.Name.ToLower()}");
-      var indicatorObject = new GameObject($"ItemIndicator_{itemType.Name}");
+      var itemSprite = GameResources.LoadItemSprite(item._SpriteName);
+      var indicatorObject = new GameObject($"ItemIndicator_{item._SpriteName}");
       indicatorObject.transform.position = spawnPosition;
       var spriteRenderer = indicatorObject.AddComponent<SpriteRenderer>();
       spriteRenderer.sprite = itemSprite;
@@ -65,7 +65,7 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
       var indicator = new ScriptItemVisualIndicator
       {
         _Entity = forEntity,
-        _ItemType = itemType,
+        _ItemType = item._ItemTypeData,
         _CreationTime = Time.time,
         _SpawnPosition = spawnPosition,
         _IndicatorObject = indicatorObject

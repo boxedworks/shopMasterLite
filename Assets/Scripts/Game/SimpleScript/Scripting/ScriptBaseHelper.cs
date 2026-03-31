@@ -65,6 +65,19 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
           }
 
           var logMessage = parameters[0];
+
+          // Check entity or item
+          if (ScriptEntityHelper.IsValidVariableEntity(logMessage))
+          {
+            var entity = ScriptEntityHelper.GetEntityByIdOrStatement(logMessage);
+            logMessage = entity?.ToString() ?? "[null entity]";
+          }
+          else if (ScriptEntityHelper.IsValidVariableItem(logMessage))
+          {
+            var item = ScriptEntityHelper.GetItemByIdOrStatement(logMessage);
+            logMessage = item?.ToString() ?? "[null item]";
+          }
+
           Debug.Log(logMessage);
           script._AttachedEntity.AppendLog(logMessage);
 
@@ -417,7 +430,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
           }
 
           // Create visual indicator for the given item
-          ScriptItemController.s_ItemVisualIndicatorManager.CreateIndicator(entity, item._ItemTypeData, script._AttachedEntity._TilePositionVector3);
+          ScriptItemController.s_ItemVisualIndicatorManager.CreateIndicator(entity, item, script._AttachedEntity._TilePositionVector3);
 
           //
           Terminal.s_Singleton.LogMessage($"Gave item ID {item._ItemTypeData.Name} to entity ID {entityData}");
@@ -476,9 +489,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
           }
 
           // Get entity by id
-          var entityData = parameters[0];
-          var entity = ScriptEntityHelper.GetEntityByIdOrStatement(entityData);
-          if (entity == null)
+          var targetData = parameters[0];
+          var target = ScriptEntityHelper.GetTargetByStatement(targetData);
+          if (target == null)
           {
             return SystemFunctionReturnData.NullReference();
           }
@@ -487,7 +500,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
           var spritePath = ScriptEntityHelper.GetStringVariable(parameters[1]);
 
           // Set sprite
-          var hasError = !entity.SetSprite(spritePath);
+          var hasError = !(target._IsScriptEntity ? target._ScriptEntity.SetSprite(spritePath) : target._Item.SetSprite(spritePath));
           if (hasError)
           {
             return SystemFunctionReturnData.Custom("Error setting sprite; check console for details");

@@ -106,7 +106,7 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
             foreach (var itemData in entity._Storage)
             {
               if (itemData != null)
-                new ScriptItem(itemData);
+                new ScriptItem(itemData, entity);
             }
         }
       }
@@ -276,7 +276,11 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
 
     public static string GetItemStatement(ScriptItem item)
     {
-      return $"$Item[{item._ItemData.Id}]";
+      return GetItemStatement(item._ItemData.Id);
+    }
+    public static string GetItemStatement(int itemId)
+    {
+      return $"$Item[{itemId}]";
     }
 
     public static bool IsValidTargetVariable(string variable)

@@ -1,0 +1,18 @@
+var items = this.items;
+if(items.count == 0)
+	log("You shake the empty vial.")
+	exit(5)
+end
+
+var base = items:get(0)
+if(items.count == 1)
+	log("You shake the vial of {base}.)
+	exit(5)
+end
+
+var ing0 = items:get(1)
+log("You shake the vial of {base} and {ing0}.)
+
+this.shaken = 1
+
+exit(5)

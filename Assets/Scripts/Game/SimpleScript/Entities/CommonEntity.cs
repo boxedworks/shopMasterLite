@@ -33,6 +33,9 @@ namespace Assets.Scripts.Game.SimpleScript
       }
       _Attributes[variableName] = value;
     }
+
+    //
+    public abstract override string ToString();
   }
 
 }

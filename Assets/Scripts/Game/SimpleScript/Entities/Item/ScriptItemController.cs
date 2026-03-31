@@ -97,8 +97,13 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
         if (storage[i] != null)
           continue;
 
-        var newItem = new ScriptItem(itemTypeId);
+        // Create item and add to storage
+        var newItem = new ScriptItem(itemTypeId, entity);
         storage[i] = newItem._ItemData;
+
+        // Check spawn script
+
+        // Update visuals
         entity.OnItemGiven();
 
         return newItem;
@@ -134,6 +139,7 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
         {
           var id = _functionRepository.GetFunctionId(func);
           functionIds.Add(id);
+          Debug.Log($"Mapped function {func} to item type {itemTypeData.Name} with id {id}");
         }
         var publicFunctionIds = functionIds.ToArray();
         itemTypeData.PublicFunctionIds = publicFunctionIds;

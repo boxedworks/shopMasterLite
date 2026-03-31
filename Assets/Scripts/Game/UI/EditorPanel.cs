@@ -76,7 +76,7 @@ namespace Assets.Scripts.Game.UI
       // Check link click
       if (Mouse.current.leftButton.wasPressedThisFrame)
       {
-        var linkIndex = TMP_TextUtilities.FindIntersectingLink(_displayText.textComponent, Input.mousePosition, GameResources._MainCamera);
+        var linkIndex = TMP_TextUtilities.FindIntersectingLink(_displayText.textComponent, Mouse.current.position.ReadValue(), GameResources._MainCamera);
         if (linkIndex >= 0 && linkIndex < _displayText.textComponent.textInfo.linkInfo.Length)
         {
           var linkInfo = _displayText.textComponent.textInfo.linkInfo[linkIndex];
@@ -243,7 +243,10 @@ namespace Assets.Scripts.Game.UI
     {
       // Create new player entity
       var playerEntity = new ScriptEntity(0, new Vector3(-20, 0, 0), 0);
-      playerEntity._EntityData.ItemStorage.Items = Enumerable.Repeat<ScriptItemData>(null, 4).ToList();
+      playerEntity._EntityData.ItemStorage = new ScriptItemStorage
+      {
+        Items = Enumerable.Repeat<ScriptItemData>(null, 4).ToList()
+      };
       playerEntity._ScriptSpawned = false;
 
       OnAttachScript(playerEntity);

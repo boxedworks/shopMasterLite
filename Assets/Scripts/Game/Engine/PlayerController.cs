@@ -119,7 +119,7 @@ public class PlayerController
     }
 
     // Check ui tooltips
-    Debug.Log($"IsPointerOverGameObject [{EventSystem.current}]: {EventSystem.current.IsPointerOverGameObject()}");
+    //Debug.Log($"IsPointerOverGameObject [{EventSystem.current}]: {EventSystem.current.IsPointerOverGameObject()}");
   }
 
   //

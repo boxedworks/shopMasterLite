@@ -1,6 +1,7 @@
 using System.Collections.Generic;
-
 using Assets.Scripts.Game.SimpleScript.Entities.Entity;
+using Assets.Scripts.Game.SimpleScript.Scripting;
+using UnityEngine;
 
 namespace Assets.Scripts.Game.SimpleScript.Entities.Item
 {
@@ -15,7 +16,11 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
     public override List<ScriptItemData> _Storage { get { return _ItemData.ItemStorage?.Items; } }
 
     //
-    public ScriptItem(int typeId)
+    string _spriteName;
+    public string _SpriteName { get { return _spriteName ?? _ItemTypeData.Name.ToLower(); } }
+
+    //
+    public ScriptItem(int typeId, ScriptEntity spawnEntity)
     {
       _ItemData = new ScriptItemData()
       {
@@ -23,16 +28,36 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
         TypeId = typeId
       };
 
-      ScriptItemController.AddItem(this);
+      Init(spawnEntity);
     }
 
     // Load item off of itemdata
-    public ScriptItem(ScriptItemData itemData)
+    public ScriptItem(ScriptItemData itemData, ScriptEntity spawnEntity)
     {
       _ItemData = itemData;
       if (itemData.Id >= ScriptItemData.s_Id)
         ScriptItemData.s_Id = itemData.Id + 1;
+
+      Init(spawnEntity);
+    }
+
+    void Init(ScriptEntity spawnEntity)
+    {
       ScriptItemController.AddItem(this);
+
+      // Check spawn script
+      Debug.Log($"Checking spawn script for item type {_ItemTypeData.Name}");
+      if (ScriptItemController.HasFunction(this, "spawn"))
+      {
+        spawnEntity.LoadAndAttachScript(new ScriptBaseController.ScriptLoadData()
+        {
+          ScriptType = ScriptBaseController.ScriptType.ITEM,
+          PathTo = $"{_ItemTypeData.Name.ToLower()}.spawn"
+        })
+
+        // Tick spawn script immediately
+        .Tick();
+      }
     }
 
     //
@@ -63,6 +88,19 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
       if (_Attributes == null) return;
       if (!_Attributes.ContainsKey(key)) return;
       _Attributes.Remove(key);
+    }
+
+    //
+    public bool SetSprite(string spritePath)
+    {
+      _spriteName = spritePath;
+      return true;
+    }
+
+    //
+    public override string ToString()
+    {
+      return $"Item[{_ItemTypeData.Name}]";
     }
 
   }

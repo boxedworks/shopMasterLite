@@ -138,10 +138,12 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
       _lineIndex = _lineDepth = _logicDepth = 0;
 
       // Add default variables
-      _variables = new Dictionary<string, Variable>
+      {
+        _variables = new Dictionary<string, Variable>
         {
           { "this", new Variable(_logicDepth) { _Value = ScriptEntityHelper.GetEntityStatement(_attachedEntity) } }
         };
+      }
 
       //
       _externalReturnData = _externalReturnStatement = _externalReturnLine = null;
@@ -251,7 +253,10 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
         if (line.StartsWith("$SetItemCount(") && line.EndsWith(")"))
         {
           var size = int.Parse(line[14..^1]);
-          _attachedEntity._EntityData.ItemStorage.Items = Enumerable.Repeat<ScriptItemData>(null, size).ToList();
+          _attachedEntity._EntityData.ItemStorage = new ScriptItemStorage
+          {
+            Items = Enumerable.Repeat<ScriptItemData>(null, size).ToList()
+          };
           return;
         }
       }
@@ -1041,9 +1046,13 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
             if (i == 0)
             {
 
-              // Check server authenticated
+              // Check system authenticated
               if (word == "_" && _OwnerId != -1)
               {
+#if UNITY_EDITOR
+                Debug.LogWarning($"Authenticated access to system method");
+                continue;
+#endif
                 logError($"Invalid authentication");
                 break;
               }
@@ -1091,9 +1100,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               // }
 
               // Check entity variable
-              if (ScriptEntityHelper.IsValidVariableItem(word))
+              if (ScriptEntityHelper.IsValidVariableEntity(word))
               {
-                currentTarget = ScriptEntityHelper.GetTargetByStatement(word);
+                currentTarget = new ScriptTarget(ScriptEntityHelper.GetEntityByStatement(word));
                 currentTargetDepth = i;
 
                 if (parameterCheck)
@@ -1166,8 +1175,8 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               switch (word)
               {
 
-                // Check capacity
-                case "capacity":
+                // Check size
+                case "size":
                   returnStatement = (storage?.Count).ToString();
                   continue;
 
@@ -1440,7 +1449,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
                 ScriptType = ScriptBaseController.ScriptType.ITEM
               });
               itemScript._parentScript = this;
-              itemScript._variables.Add("_item", new Variable(_logicDepth) { _Value = ScriptEntityHelper.GetEntityStatement(_attachedEntity) });
+              itemScript._variables["this"]._Value = ScriptEntityHelper.GetItemStatement(currentTarget._Item);
 
               // Add script parameters
               for (var u = 0; u < functionParameters.Count; u++)
@@ -1531,8 +1540,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
                 if (parameterCheck)
                   returnStatement = returnData;
 
-                if (ScriptEntityHelper.IsValidVariableEntity(returnData))
-                  currentTarget = new ScriptTarget(ScriptEntityHelper.GetEntityByStatement(returnData));
+                var newTarget = ScriptTarget.TryGetScriptTarget(returnData);
+                if (newTarget != null)
+                  currentTarget = newTarget;
               }
 
               //
