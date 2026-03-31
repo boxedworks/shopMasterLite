@@ -70,6 +70,14 @@ ExportedObj/
 *.png
 *.wav
 
+*.svg
+*.htm*
+*.css
+*.js
+*.json
+*.md
+*.xml
+
 # Unity3D generated meta files
 *.meta
 

@@ -3,9 +3,14 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 using System.Linq;
+using TMPro;
+using UnityEngine.InputSystem;
 
-using Assets.Scripts.Game.SimpleScript;
-namespace CustomUI
+using Assets.Scripts.Game.SimpleScript.Scripting;
+using Assets.Scripts.Game.SimpleScript.Entities.Entity;
+using Assets.Scripts.Game.SimpleScript.Entities.Item;
+
+namespace Assets.Scripts.Game.UI
 {
   public class EditorPanel
   {
@@ -22,7 +27,7 @@ namespace CustomUI
     TMPro.TextMeshProUGUI _lineNumberText;
     TMPro.TMP_InputField _displayText, _inputField;
 
-    ScriptManager.ScriptBase _attachedScript;
+    ScriptBase _attachedScript;
     ScriptEntity _attachedEntity;
 
     public bool _IsFocused { get { return EventSystem.current.currentSelectedGameObject == _inputField.gameObject; } }
@@ -67,6 +72,18 @@ namespace CustomUI
       displayTextText.localPosition = inputFieldText.localPosition;
 
       var selectedEntity = PlayerController.s_Singleton._SelectedEntity ?? _attachedEntity;
+
+      // Check link click
+      if (Mouse.current.leftButton.wasPressedThisFrame)
+      {
+        var linkIndex = TMP_TextUtilities.FindIntersectingLink(_displayText.textComponent, Input.mousePosition, GameResources._MainCamera);
+        if (linkIndex >= 0 && linkIndex < _displayText.textComponent.textInfo.linkInfo.Length)
+        {
+          var linkInfo = _displayText.textComponent.textInfo.linkInfo[linkIndex];
+          var linkID = linkInfo.GetLinkID();
+          Debug.Log(linkID);
+        }
+      }
 
       // Update editor using attached script
       if (_attachedScript != null)
@@ -161,7 +178,7 @@ namespace CustomUI
       // Try to format text
       var objectColor = "yellow";
       var methodRegex = new System.Text.RegularExpressions.Regex(@"\b((var)|(if)|(else)|(end)|(while)|(for)|(continue)|(break)|(waitFor))\b");
-      formatText = methodRegex.Replace(formatText, $"<color={objectColor}>$1</color>");
+      formatText = methodRegex.Replace(formatText, $"<link=\"test\"><color={objectColor}>$1</color></link>");
 
       methodRegex = new System.Text.RegularExpressions.Regex(@";");
       formatText = methodRegex.Replace(formatText, $"<color={objectColor}>$0</color>");
@@ -204,7 +221,7 @@ namespace CustomUI
     }
 
     //
-    public void AttachScript(ScriptManager.ScriptBase script)
+    public void AttachScript(ScriptBase script)
     {
       OnAttachScript(script._AttachedEntity);
 
@@ -226,7 +243,7 @@ namespace CustomUI
     {
       // Create new player entity
       var playerEntity = new ScriptEntity(0, new Vector3(-20, 0, 0), 0);
-      playerEntity._EntityData.ItemStorage = Enumerable.Repeat<Item.ItemData>(null, 4).ToList();
+      playerEntity._EntityData.ItemStorage.Items = Enumerable.Repeat<ScriptItemData>(null, 4).ToList();
       playerEntity._ScriptSpawned = false;
 
       OnAttachScript(playerEntity);

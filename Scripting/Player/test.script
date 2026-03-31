@@ -1,18 +1,15 @@
 spawn()
+log(this)
 
 down()
 get():jump()
-
-log("item count()):" + items.count)
-log(items.capacity)
-log(items.isFull)
-log(items.isEmpty)
-
-waitFor(false)
+right()
 
 var rock = get()
 if(rock != null)
 	rock:mine()
 end
+left()
+
 up()
 get():jump()

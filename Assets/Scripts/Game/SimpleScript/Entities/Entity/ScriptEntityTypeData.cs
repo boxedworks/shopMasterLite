@@ -1,11 +1,11 @@
 using System;
 
-namespace Assets.Scripts.Game.SimpleScript
+namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
 {
 
   //
   [Serializable]
-  public struct EntityTypeData
+  public struct ScriptEntityTypeData
   {
 
     public int Id;

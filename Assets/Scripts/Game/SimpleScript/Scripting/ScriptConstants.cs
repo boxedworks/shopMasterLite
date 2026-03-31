@@ -1,5 +1,5 @@
 
-namespace Assets.Scripts.Game.SimpleScript
+namespace Assets.Scripts.Game.SimpleScript.Scripting
 {
 
   public static class ScriptConstants

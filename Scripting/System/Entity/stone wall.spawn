@@ -1,0 +1,3 @@
+_:setSprite(this, "blocks/stone_bricks_dark")
+
+exit()

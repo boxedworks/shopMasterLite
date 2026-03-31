@@ -6,9 +6,9 @@ using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 using System.Linq;
-using Assets.Scripts.Game.SimpleScript;
+using Assets.Scripts.Game.SimpleScript.Entities.Entity;
 
-namespace CustomUI
+namespace Assets.Scripts.Game.UI
 {
   public class UIElements
   {
@@ -61,7 +61,7 @@ namespace CustomUI
       _ScriptsPanel.SetActive(false);
 
       // Initialize other UI systems
-      new StatusPanel.StatusPanelManager();
+      new StatusPanelController();
       _EditorPanel = new EditorPanel();
     }
 
@@ -136,7 +136,7 @@ namespace CustomUI
     //
     public void HandleEntityClick(ScriptEntity entity)
     {
-      StatusPanel.StatusPanelManager.TryCreateStatusForEntity_S(entity);
+      StatusPanelController.TryCreateStatusForEntity_S(entity);
 
       //
       if (entity._AttachedScripts != null)

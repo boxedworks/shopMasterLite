@@ -1,7 +1,8 @@
 using UnityEngine;
-
-using Assets.Scripts.Game.SimpleScript;
-using CustomUI;
+using Assets.Scripts.Game.SimpleScript.Scripting;
+using Assets.Scripts.Game.SimpleScript.Entities.Item;
+using Assets.Scripts.Game.SimpleScript.Entities.Entity;
+using Assets.Scripts.Game.UI;
 
 public class GameController : MonoBehaviour
 {
@@ -16,8 +17,8 @@ public class GameController : MonoBehaviour
     s_Singleton = this;
 
     new GameResources();
-    ScriptManager.Initialize();
-    ItemManager.Initialize();
+    ScriptBaseController.Initialize();
+    ScriptItemController.Initialize();
     new PlayerController();
     new UIElements();
     new SfxController();
@@ -32,6 +33,9 @@ public class GameController : MonoBehaviour
     ScriptEntityHelper.LoadEntityData();
 
     // Other settings
+
+    //
+    Debug.Log("Game loaded");
   }
 
   //
@@ -48,13 +52,13 @@ public class GameController : MonoBehaviour
       s_CurrentTick++;
 
       //Debug.Log($"<color=yellow>Tick: {s_CurrentTick}</color>");
-      ScriptManager.TickScripts();
+      ScriptBaseController.TickScripts();
       ScriptEntity.TickScriptEntities();
     }
 
     // Update entities
     ScriptEntity.UpdateScriptEntities();
-    ItemManager.Update();
+    ScriptItemController.Update();
 
     // Update player
     PlayerController.s_Singleton.Update();

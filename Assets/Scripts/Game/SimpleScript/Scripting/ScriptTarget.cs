@@ -1,14 +1,19 @@
-namespace Assets.Scripts.Game.SimpleScript
+using System.Collections.Generic;
+
+using Assets.Scripts.Game.SimpleScript.Entities.Entity;
+using Assets.Scripts.Game.SimpleScript.Entities.Item;
+
+namespace Assets.Scripts.Game.SimpleScript.Scripting
 {
 
-  public class ScriptTarget
+  public class ScriptTarget : CommonEntity
   {
 
     // Holds target types
     ScriptEntity _scriptEntity;
     public ScriptEntity _ScriptEntity { get { return _scriptEntity; } }
-    Item _item;
-    public Item _Item { get { return _item; } }
+    ScriptItem _item;
+    public ScriptItem _Item { get { return _item; } }
 
     // Target type
     public enum TargetType
@@ -20,6 +25,9 @@ namespace Assets.Scripts.Game.SimpleScript
     }
     TargetType _targetType;
     public TargetType _TargetType { get { return _targetType; } }
+
+    public bool _IsItem { get { return _targetType == TargetType.ITEM; } }
+    public bool _IsScriptEntity { get { return _targetType == TargetType.SCRIPT_ENTITY; } }
 
     // Get name
     public string _Type
@@ -47,13 +55,16 @@ namespace Assets.Scripts.Game.SimpleScript
       }
     }
 
+    public override List<ScriptItemData> _Storage { get { return _IsScriptEntity ? _scriptEntity._EntityData.ItemStorage?.Items : _item._ItemData.ItemStorage?.Items; } }
+    public override Dictionary<string, string> _Attributes { get { return _IsScriptEntity ? _scriptEntity._EntityData.Attributes : _item._ItemData.Attributes; } }
+
     //
     public ScriptTarget(ScriptEntity entity)
     {
       _scriptEntity = entity;
       _targetType = TargetType.SCRIPT_ENTITY;
     }
-    public ScriptTarget(Item item)
+    public ScriptTarget(ScriptItem item)
     {
       _item = item;
       _targetType = TargetType.ITEM;

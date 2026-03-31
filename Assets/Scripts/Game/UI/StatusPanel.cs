@@ -1,10 +1,12 @@
 using System.Collections.Generic;
-using System.Xml.Serialization;
-using Assets.Scripts.Game.SimpleScript;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace CustomUI
+using Assets.Scripts.Game.SimpleScript.Scripting;
+using Assets.Scripts.Game.SimpleScript.Entities.Entity;
+using Assets.Scripts.Game.SimpleScript.Entities.Item;
+
+namespace Assets.Scripts.Game.UI
 {
   public class StatusPanel
   {
@@ -19,95 +21,14 @@ namespace CustomUI
     }
 
     //
-    public class StatusPanelManager
-    {
-      public static StatusPanelManager s_Singleton { get; private set; }
-      UIElements _uiElements { get { return UIElements.s_Singleton; } }
-
-      //
-      Dictionary<int, StatusPanel> _openStatusPanels;
-
-      public StatusPanelManager()
-      {
-        s_Singleton = this;
-
-        _openStatusPanels = new();
-      }
-
-      public void RegisterStatusPanel(StatusPanel statusPanel)
-      {
-
-        // Offset new status panel
-        if (_openStatusPanels.Count > 0)
-        {
-          var statusPanels = new List<StatusPanel>(_openStatusPanels.Values);
-          var lastStatusPanel = statusPanels[^1];
-          statusPanel._panel.position = lastStatusPanel._panel.position + new Vector3(30, -30, 0);
-          _uiElements.SmartSetPanelPosition(statusPanel._panel);
-        }
-
-        _openStatusPanels.Add(statusPanel._entityId, statusPanel);
-      }
-      public void UnregisterStatusPanel(StatusPanel statusPanel)
-      {
-        _openStatusPanels.Remove(statusPanel._entityId);
-      }
-
-      void TryCreateStatusForEntity(ScriptEntity entity)
-      {
-        if (!_openStatusPanels.ContainsKey(entity._EntityData.Id))
-          new StatusPanel(entity);
-        else
-        {
-          var statusPanel = _openStatusPanels[entity._EntityData.Id];
-          statusPanel._panel.SetAsLastSibling();
-        }
-      }
-      public static void TryCreateStatusForEntity_S(ScriptEntity entity)
-      {
-        s_Singleton.TryCreateStatusForEntity(entity);
-      }
-
-      public static void TryDestroyStatusForEntity_S(ScriptEntity entity)
-      {
-        if (s_Singleton._openStatusPanels.ContainsKey(entity._EntityData.Id))
-          s_Singleton._openStatusPanels[entity._EntityData.Id].CloseButtonAction();
-      }
-
-      // Replace status panel with new one
-      void UpdateStatusUI(ScriptEntity entity, SubPanelType subPanelKey)
-      {
-        if (_openStatusPanels.ContainsKey(entity._EntityData.Id))
-        {
-          var statusPanel = _openStatusPanels[entity._EntityData.Id];
-          if (!statusPanel._openSubPanels.ContainsKey(subPanelKey))
-            return;
-
-          switch (subPanelKey)
-          {
-            case SubPanelType.Inventory:
-              statusPanel.CloseInventoryPanel();
-              statusPanel.OpenInventoryPanel();
-              break;
-            case SubPanelType.Logger:
-              statusPanel.UpdateLoggerText();
-              break;
-            case SubPanelType.Scripts:
-              statusPanel.UpdateScriptsPanel();
-              break;
-          }
-        }
-      }
-      public static void UpdateStatusUI_S(ScriptEntity entity, SubPanelType subPanelKey)
-      {
-        s_Singleton.UpdateStatusUI(entity, subPanelKey);
-      }
-    }
-
-    //
     ScriptEntity _entity;
+    public ScriptEntity _Entity { get { return _entity; } }
+
     int _entityId { get { return _entity._EntityData.Id; } }
+    public int _EntityId { get { return _entityId; } }
+
     RectTransform _panel;
+    public RectTransform _Panel { get { return _panel; } }
 
     Dictionary<SubPanelType, RectTransform> _openSubPanels;
 
@@ -138,7 +59,7 @@ namespace CustomUI
       }
 
       // Register with manager
-      StatusPanelManager.s_Singleton.RegisterStatusPanel(this);
+      StatusPanelController.s_Singleton.RegisterStatusPanel(this);
 
       // Show panel
       _panel.gameObject.SetActive(true);
@@ -227,7 +148,7 @@ namespace CustomUI
     }
 
     //
-    void OpenInventoryPanel()
+    public void OpenInventoryPanel()
     {
       var panelBase = UIElements.s_Singleton._InventoryPanel;
       var panel = Object.Instantiate(panelBase, _panel.GetChild(1)).transform as RectTransform;
@@ -291,7 +212,7 @@ namespace CustomUI
         var sprite = icon.AddComponent<Image>();
         sprite.transform.SetParent(itemSlot.transform, false);
 
-        var item = ItemManager.GetItem(itemData.Id);
+        var item = ScriptItemController.GetItem(itemData.Id);
         var loadedSprite = GameResources.LoadItemSprite($"{item._ItemTypeData.Name.ToLower()}");
         sprite.sprite = loadedSprite;
 
@@ -308,7 +229,7 @@ namespace CustomUI
       _openSubPanels.Add(SubPanelType.Inventory, panel);
       panel.gameObject.SetActive(true);
     }
-    void CloseInventoryPanel()
+    public void CloseInventoryPanel()
     {
       ClosePanel(SubPanelType.Inventory);
     }
@@ -330,7 +251,7 @@ namespace CustomUI
     {
       ClosePanel(SubPanelType.Logger);
     }
-    void UpdateLoggerText()
+    public void UpdateLoggerText()
     {
       var panel = _openSubPanels[SubPanelType.Logger];
       var logText = panel.GetChild(1).GetChild(0).GetChild(0).GetComponent<TMPro.TextMeshProUGUI>();
@@ -354,7 +275,7 @@ namespace CustomUI
     {
       ClosePanel(SubPanelType.Scripts);
     }
-    void UpdateScriptsPanel()
+    public void UpdateScriptsPanel()
     {
       var panel = _openSubPanels[SubPanelType.Scripts];
       var scriptEntries = panel.GetChild(1);
@@ -387,10 +308,10 @@ namespace CustomUI
           scriptButton.onClick.RemoveAllListeners();
           scriptButton.onClick.AddListener(() =>
           {
-            var newScript = _entity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
+            var newScript = _entity.LoadAndAttachScript(new ScriptBaseController.ScriptLoadData()
             {
               PathTo = $"{typeName}.{method}",
-              ScriptType = ScriptManager.ScriptType.ENTITY
+              ScriptType = ScriptBaseController.ScriptType.ENTITY
             });
             if (newScript == null)
               return;
@@ -411,10 +332,10 @@ namespace CustomUI
         if (_entity._IsPlayer)
           scriptButton.onClick.AddListener(() =>
           {
-            var newScript = _entity.LoadAndAttachScript(new ScriptManager.ScriptLoadData()
+            var newScript = _entity.LoadAndAttachScript(new ScriptBaseController.ScriptLoadData()
             {
               PathTo = "test",
-              ScriptType = ScriptManager.ScriptType.PLAYER
+              ScriptType = ScriptBaseController.ScriptType.PLAYER
             });
             if (newScript == null)
               return;
@@ -453,7 +374,7 @@ namespace CustomUI
               if (script._IsEnabled)
                 script.Disable();
               else
-                ScriptManager.RemoveScript(script);
+                ScriptBaseController.RemoveScript(script);
 
               UpdateScriptsPanel();
             });
@@ -476,14 +397,14 @@ namespace CustomUI
       panelSub.sizeDelta = new Vector2(panelSub.sizeDelta.x, subSize + panelOffset);
     }
 
-    void ClosePanel(SubPanelType panelKey)
+    public void ClosePanel(SubPanelType panelKey)
     {
       Object.Destroy(_openSubPanels[panelKey].gameObject);
       _openSubPanels.Remove(panelKey);
     }
 
     //
-    void CloseButtonAction()
+    public void CloseButtonAction()
     {
 
       // Destroy status panel
@@ -491,7 +412,14 @@ namespace CustomUI
       _panel = null;
 
       // Unregister from manager
-      StatusPanelManager.s_Singleton.UnregisterStatusPanel(this);
+      StatusPanelController.s_Singleton.UnregisterStatusPanel(this);
     }
+
+    //
+    public bool HasOpenSubPanel(SubPanelType subPanelKey)
+    {
+      return _openSubPanels.ContainsKey(subPanelKey);
+    }
+
   }
 }

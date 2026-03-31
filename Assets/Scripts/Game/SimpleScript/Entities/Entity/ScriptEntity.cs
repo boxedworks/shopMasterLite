@@ -1,14 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Assets.Scripts.Game.SimpleScript.Scripting;
+using Assets.Scripts.Game.SimpleScript.Entities.Item;
+using Assets.Scripts.Game.UI;
 
-using CustomUI;
-using NUnit.Framework;
-
-namespace Assets.Scripts.Game.SimpleScript
+namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
 {
 
   // A basic, selectable entity
-  public class ScriptEntity
+  public class ScriptEntity : CommonEntity
   {
 
     // Tick rates
@@ -20,28 +20,31 @@ namespace Assets.Scripts.Game.SimpleScript
     public static Dictionary<(int, int, int), List<ScriptEntity>> s_ScriptEntitiesMapped;
 
     // Holds saveable entity data
-    public EntityData _EntityData;
-    public EntityTypeData _EntityTypeData { get { return ScriptEntityHelper.GetEntityTypeData(this); } }
+    public ScriptEntityData _EntityData;
+    public ScriptEntityTypeData _EntityTypeData { get { return ScriptEntityHelper.GetEntityTypeData(this); } }
+    public override Dictionary<string, string> _Attributes { get { return _EntityData.Attributes; } }
     public int _EntityType { get { return _EntityTypeData.Id; } }
     public (int x, int y, int z) _TilePosition { get { return (_EntityData.X, _EntityData.Y, _EntityData.Z); } }
     public Vector3 _TilePositionVector3 { get { return new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z); } }
     public int _Direction { get { return _EntityData.Direction; } }
+    public override List<ScriptItemData> _Storage { get { return _EntityData.ItemStorage?.Items; } }
     public bool _IsPlayer { get { return _EntityData.OwnerId == 0; } }
-    public List<Item.ItemData> _Storage { get { return _EntityData.ItemStorage; } }
-    public bool _HasStorage { get { return (_Storage?.Count ?? 0) > 0; } }
     public bool _HasLog { get { return (_EntityData.Log?.Count ?? 0) > 0; } }
     bool _spawned, _scriptSpawned;
     public bool _ScriptSpawned { get { return _scriptSpawned; } set { _scriptSpawned = value; } }
 
     // VFX
     Transform _billboard;
+    public Transform _Billboard { get { return _billboard; } }
     Transform _sprite { get { return _billboard.GetChild(0); } }
+    public Transform _Sprite { get { return _sprite; } }
     bool _hasSprite;
     string _cubeSpritePath;
 
     // Animation data
-    Animation _currentAnimation;
-    Animation.AnimationType _animationOverride;
+    ScriptEntityAnimation _currentAnimation;
+    public ScriptEntityAnimation _CurrentAnimation { get { return _currentAnimation; } set { _currentAnimation = value; } }
+    ScriptEntityAnimation.AnimationType _animationOverride;
     float _animationOverrideDuration;
 
     // Handles tick-updating of entity
@@ -52,11 +55,8 @@ namespace Assets.Scripts.Game.SimpleScript
     public bool _CanTick { get { return _tickCooldown == 0 && !_hasEntityCommands; } }
 
     //
-    List<ScriptManager.ScriptBase> _attachedScripts;
-    public List<ScriptManager.ScriptBase> _AttachedScripts { get { return _attachedScripts; } }
-
-    // Holds local entity variables; ex: health
-    Dictionary<string, int> _entityVariableMappings;
+    List<ScriptBase> _attachedScripts;
+    public List<ScriptBase> _AttachedScripts { get { return _attachedScripts; } }
 
     //
     bool _isSolid { get { return _EntityTypeData.Solid; } }
@@ -78,7 +78,7 @@ namespace Assets.Scripts.Game.SimpleScript
     {
 
       // Create network data
-      _EntityData = new EntityData
+      _EntityData = new ScriptEntityData
       {
         Id = s_ScriptEntityId++,
         TypeId = entityDataType,
@@ -87,7 +87,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
         //ItemStorage = new(),
 
-        EntityVariables_Int = new(),
+        Attributes = new(),
 
         X = (int)position.x,
         Y = (int)position.y,
@@ -96,29 +96,13 @@ namespace Assets.Scripts.Game.SimpleScript
       AddScriptEntity(this);
 
       // Create entity variables per type
-      _EntityData.EntityVariables_Int.Add(new ScriptManager.EntityVariable_Int()
-      {
-        Name = "x",
-        Value = _EntityData.X
-      });
-      _EntityData.EntityVariables_Int.Add(new ScriptManager.EntityVariable_Int()
-      {
-        Name = "z",
-        Value = _EntityData.Z
-      });
-      _EntityData.EntityVariables_Int.Add(new ScriptManager.EntityVariable_Int()
-      {
-        Name = "y",
-        Value = _EntityData.Y
-      });
+      SetEntityVariable("x", $"{_EntityData.X}");
+      SetEntityVariable("y", $"{_EntityData.Y}");
+      SetEntityVariable("z", $"{_EntityData.Z}");
       switch (_EntityTypeData.Name)
       {
         case "Character":
-          _EntityData.EntityVariables_Int.Add(new ScriptManager.EntityVariable_Int()
-          {
-            Name = "Health",
-            Value = 10
-          });
+          SetEntityVariable("Health", "10");
           break;
       }
 
@@ -126,7 +110,7 @@ namespace Assets.Scripts.Game.SimpleScript
     }
 
     // Initialize a script entity using loaded entity data
-    public ScriptEntity(EntityData entityData)
+    public ScriptEntity(ScriptEntityData entityData)
     {
       // Create network data
       _EntityData = entityData;
@@ -140,17 +124,15 @@ namespace Assets.Scripts.Game.SimpleScript
     //
     void Init()
     {
-      InitializeEntityVariables();
-
       // Set up model
       SetupModel();
 
       // Check spawn script
       if (ScriptEntityHelper.HasFunction(this, "spawn"))
       {
-        LoadAndAttachScript(new ScriptManager.ScriptLoadData()
+        LoadAndAttachScript(new ScriptBaseController.ScriptLoadData()
         {
-          ScriptType = ScriptManager.ScriptType.ENTITY,
+          ScriptType = ScriptBaseController.ScriptType.ENTITY,
           PathTo = $"{_EntityTypeData.Name.ToLower()}.spawn"
         })
 
@@ -190,17 +172,17 @@ namespace Assets.Scripts.Game.SimpleScript
         for (var i = _attachedScripts.Count - 1; i >= 0; i--)
         {
           var script = _attachedScripts[i];
-          ScriptManager.RemoveScript(script);
+          ScriptBaseController.RemoveScript(script);
         }
 
       // Destroy any objects
       if (_HasStorage)
         foreach (var itemData in _Storage)
           if (itemData != null)
-            ItemManager.GetItem(itemData.Id)?.Destroy();
+            ScriptItemController.GetItem(itemData.Id)?.Destroy();
 
       // Cleanup graphics
-      EntityMaterialManager.OnEntityRemoved(_cubeSpritePath);
+      ScriptEntityMaterialController.OnEntityRemoved(_cubeSpritePath);
       Object.Destroy(_billboard.gameObject);
     }
     public static void DestroyEntity(ScriptEntity entity)
@@ -350,11 +332,11 @@ namespace Assets.Scripts.Game.SimpleScript
         cube.transform.localPosition = Vector3.zero;
 
         // Get material from manager
-        var material = EntityMaterialManager.GetMaterialBySpritePath(spritePath);
+        var material = ScriptEntityMaterialController.GetMaterialBySpritePath(spritePath);
         cube.GetComponent<Renderer>().material = material;
 
         if (_cubeSpritePath != null)
-          EntityMaterialManager.OnEntityRemoved(_cubeSpritePath);
+          ScriptEntityMaterialController.OnEntityRemoved(_cubeSpritePath);
 
         _cubeSpritePath = spritePath;
         _hasSprite = false;
@@ -378,129 +360,6 @@ namespace Assets.Scripts.Game.SimpleScript
       return true;
     }
 
-    //
-    public class Animation
-    {
-
-      ScriptEntity _entity;
-      Transform _billboard { get { return _entity._billboard; } }
-      Transform _sprite { get { return _entity._sprite; } }
-
-      public enum AnimationType
-      {
-        None,
-
-        Move,
-        Attack,
-        Jump,
-
-        Shake,
-      }
-      AnimationType _animationType;
-
-      //
-      float _animationTime, _animationDuration;
-      Vector3 _animationStartPos;
-
-      public Animation(ScriptEntity entity, AnimationType animationType, float duration)
-      {
-        _entity = entity;
-        _animationType = animationType;
-
-        _animationStartPos = _billboard.position;
-
-        _animationDuration = duration;
-        _animationTime = 0f;
-
-        // Play sfx
-        switch (animationType)
-        {
-          case AnimationType.Move:
-            SfxController.PlaySfxAt(entity._TilePositionVector3, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Move, 0.13f);
-            break;
-
-          case AnimationType.Jump:
-            SfxController.PlaySfxAt(entity._TilePositionVector3, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump, 0.3f);
-            break;
-        }
-      }
-
-      //
-      public void Update()
-      {
-
-        // Check if animation finished
-        if (_animationTime > _animationDuration)
-        {
-          _entity._currentAnimation = null;
-          return;
-        }
-        _animationTime += Time.deltaTime;
-        var isAnimationComplete = _animationTime > _animationDuration;
-
-        var animationTimeNormalized = _animationTime / _animationDuration;
-        var endPos = _entity._TilePositionVector3;
-
-        // Apply animation effect based on type
-        if (isAnimationComplete)
-          OnAnimatedRemoved();
-        else
-          switch (_animationType)
-          {
-            case AnimationType.Move:
-              _billboard.position = Vector3.Lerp(_animationStartPos, endPos, animationTimeNormalized);
-              break;
-            case AnimationType.Jump:
-              var position = Vector3.Lerp(_animationStartPos, endPos, animationTimeNormalized);
-              var jumpHeight = 0.5f;
-              position.y += Mathf.Sin(animationTimeNormalized * Mathf.PI) * jumpHeight;
-              _billboard.position = position;
-              break;
-            case AnimationType.Attack:
-              _animationStartPos = Vector3.zero;
-              var localDirection = _sprite.InverseTransformDirection(DirectionToVector3(_entity._Direction));
-              endPos = _animationStartPos + localDirection * 0.65f;
-              position = Vector3.Lerp(_animationStartPos, endPos, Mathf.Sin(animationTimeNormalized * Mathf.PI));
-              _sprite.localPosition = position;
-              break;
-
-            case AnimationType.Shake:
-              var shakeIntensity = 1f;
-              var shakeDisplacement = Random.insideUnitSphere * shakeIntensity * 0.1f;
-              _sprite.localPosition = shakeDisplacement;
-              break;
-          }
-      }
-
-      //
-      public void OnAnimatedRemoved()
-      {
-        var endPos = _entity._TilePositionVector3;
-
-        switch (_animationType)
-        {
-          case AnimationType.Move:
-          case AnimationType.Jump:
-            _billboard.position = endPos;
-            break;
-
-          case AnimationType.Attack:
-          case AnimationType.Shake:
-            _sprite.localPosition = Vector3.zero;
-            break;
-        }
-
-        // Check sfx
-        switch (_animationType)
-        {
-          case AnimationType.Jump:
-            SfxController.PlaySfxAt(_entity._TilePositionVector3, SfxController.AudioObjectType.Character, (int)SfxController.CharacterSfx.Jump_Land, 0.2f);
-            break;
-        }
-      }
-
-    }
-
     void Update()
     {
 
@@ -520,31 +379,31 @@ namespace Assets.Scripts.Game.SimpleScript
     }
 
     //
-    void SetAnimation(Animation.AnimationType animationType, float durationInTicks)
+    void SetAnimation(ScriptEntityAnimation.AnimationType animationType, float durationInTicks)
     {
       if (_currentAnimation != null)
       {
         //Debug.LogWarning($"Setting animation [{animationType}] while already playing animation on entity[{_EntityData.Id}]!");
         _currentAnimation.OnAnimatedRemoved();
       }
-      if (_animationOverride != Animation.AnimationType.None)
+      if (_animationOverride != ScriptEntityAnimation.AnimationType.None)
       {
         //Debug.Log($"Animation [{animationType}] overridden by [{_animationOverride}] on entity[{_EntityData.Id}]!");
         animationType = _animationOverride;
         durationInTicks = _animationOverrideDuration;
 
-        _animationOverride = Animation.AnimationType.None;
+        _animationOverride = ScriptEntityAnimation.AnimationType.None;
       }
-      _currentAnimation = new Animation(this, animationType, durationInTicks * GameController.s_TickRate);
+      _currentAnimation = new ScriptEntityAnimation(this, animationType, durationInTicks * GameController.s_TickRate);
     }
-    public void SetAnimationOverride(Animation.AnimationType animationType, float durationInTicks)
+    public void SetAnimationOverride(ScriptEntityAnimation.AnimationType animationType, float durationInTicks)
     {
       _animationOverride = animationType;
       _animationOverrideDuration = durationInTicks;
     }
 
     //
-    public void Animate(Animation.AnimationType animationType, float durationInTicks)
+    public void Animate(ScriptEntityAnimation.AnimationType animationType, float durationInTicks)
     {
       SetAnimation(animationType, durationInTicks);
     }
@@ -566,74 +425,7 @@ namespace Assets.Scripts.Game.SimpleScript
       }
 
       //
-      StatusPanel.StatusPanelManager.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Scripts);
-    }
-
-    //
-    void InitializeEntityVariables()
-    {
-      // Map entity variable indexes
-      _entityVariableMappings = new();
-      for (var i = 0; i < _EntityData.EntityVariables_Int.Count; i++)
-        _entityVariableMappings.Add(_EntityData.EntityVariables_Int[i].Name, i);
-    }
-
-    // Saveable data for the entity
-    [System.Serializable]
-    public struct EntityData
-    {
-
-      // Unique Id of entity
-      public int Id;
-
-      // Identifier for what type of entity this is (ex: 0 = wood, 1 = stone, etc.)
-      public int TypeId;
-
-      // Owner of entity; -1 = server
-      public int OwnerId;
-
-      // X, Y, and Z position of the entity
-      public int X, Y, Z;
-
-      // Entity direction
-      public int Direction;
-
-      // Item storage
-      public List<Item.ItemData> ItemStorage;
-
-      // Logger
-      public List<string> Log;
-
-      // Holds entity's variables that can be referenced in scripts
-      public List<ScriptManager.EntityVariable_Int> EntityVariables_Int;
-    }
-
-    //
-    public bool HasEntityVariable_Int(string variableName)
-    {
-      return _entityVariableMappings.ContainsKey(variableName);
-    }
-    public int GetEntityVariable_Int(string variableName)
-    {
-      return _EntityData.EntityVariables_Int[_entityVariableMappings[variableName]].Value;
-    }
-    public void SetEntityVariable_Int(string variableName, int value)
-    {
-      if (!HasEntityVariable_Int(variableName))
-      {
-        AddEntityVariable_Int(variableName, value);
-        return;
-      }
-      _EntityData.EntityVariables_Int[_entityVariableMappings[variableName]].Value = value;
-    }
-    public void AddEntityVariable_Int(string variableName, int value)
-    {
-      _EntityData.EntityVariables_Int.Add(new ScriptManager.EntityVariable_Int()
-      {
-        Name = variableName,
-        Value = value
-      });
-      _entityVariableMappings.Add(variableName, _EntityData.EntityVariables_Int.Count - 1);
+      StatusPanelController.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Scripts);
     }
 
     void HandleCommand(EntityCommand entityCommand)
@@ -715,13 +507,13 @@ namespace Assets.Scripts.Game.SimpleScript
       AddScriptEntity(this);
 
       // Set entity variables for position
-      SetEntityVariable_Int("x", _EntityData.X);
-      SetEntityVariable_Int("y", _EntityData.Y);
-      SetEntityVariable_Int("z", _EntityData.Z);
+      SetEntityVariable("x", $"{_EntityData.X}");
+      SetEntityVariable("y", $"{_EntityData.Y}");
+      SetEntityVariable("z", $"{_EntityData.Z}");
 
       // Animate
       if (animate)
-        SetAnimation(Animation.AnimationType.Move, _TICKS_PER_MOVEMENT);
+        SetAnimation(ScriptEntityAnimation.AnimationType.Move, _TICKS_PER_MOVEMENT);
       else
         _billboard.position = _TilePositionVector3;
 
@@ -735,22 +527,11 @@ namespace Assets.Scripts.Game.SimpleScript
 
       return true;
     }
-    static Vector3 DirectionToVector3(int direction)
-    {
-      switch (direction)
-      {
-        case 0: return new Vector3(0, 0, 1);
-        case 1: return new Vector3(0, 0, -1);
-        case 2: return new Vector3(-1, 0, 0);
-        case 3: return new Vector3(1, 0, 0);
-      }
-      return Vector3.zero;
-    }
 
     // Load and attach script to entity
-    public ScriptManager.ScriptBase LoadAndAttachRawScript(string rawScript)
+    public ScriptBase LoadAndAttachRawScript(string rawScript)
     {
-      var newScript = ScriptManager.s_Singleton.AttachScriptRawTo(
+      var newScript = ScriptBaseController.s_Singleton.AttachScriptRawTo(
         this,
         rawScript,
         _EntityData.OwnerId
@@ -780,14 +561,14 @@ namespace Assets.Scripts.Game.SimpleScript
       _attachedScripts.Add(newScript);
       return newScript;
     }
-    public ScriptManager.ScriptBase LoadAndAttachScript(ScriptManager.ScriptLoadData scriptLoadData)
+    public ScriptBase LoadAndAttachScript(ScriptBaseController.ScriptLoadData scriptLoadData)
     {
       var rawScript = (scriptLoadData.Headers != null ? scriptLoadData.Headers + "\n" : "") + (scriptLoadData.ScriptType switch
       {
-        ScriptManager.ScriptType.ENTITY => ScriptManager.LoadSystemEntityScript(scriptLoadData.PathTo),
-        ScriptManager.ScriptType.ITEM => ScriptManager.LoadSystemItemScript(scriptLoadData.PathTo),
+        ScriptBaseController.ScriptType.ENTITY => ScriptBaseController.LoadSystemEntityScript(scriptLoadData.PathTo),
+        ScriptBaseController.ScriptType.ITEM => ScriptBaseController.LoadSystemItemScript(scriptLoadData.PathTo),
 
-        _ => ScriptManager.LoadPlayerScript(scriptLoadData.PathTo)
+        _ => ScriptBaseController.LoadPlayerScript(scriptLoadData.PathTo)
       });
 
       var script = LoadAndAttachRawScript(rawScript);
@@ -797,7 +578,7 @@ namespace Assets.Scripts.Game.SimpleScript
     }
 
     //
-    public void DetachScript(ScriptManager.ScriptBase script)
+    public void DetachScript(ScriptBase script)
     {
       if (_attachedScripts == null || !_attachedScripts.Contains(script))
       {
@@ -830,7 +611,7 @@ namespace Assets.Scripts.Game.SimpleScript
         log.RemoveAt(0);
 
       //
-      StatusPanel.StatusPanelManager.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Logger);
+      StatusPanelController.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Logger);
     }
     public string GetLogString()
     {
@@ -842,7 +623,11 @@ namespace Assets.Scripts.Game.SimpleScript
     //
     public void OnItemGiven()
     {
-      StatusPanel.StatusPanelManager.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Inventory);
+      StatusPanelController.UpdateStatusUI_S(this, StatusPanel.SubPanelType.Inventory);
+    }
+
+    public class ItemStorage
+    {
     }
   }
 }

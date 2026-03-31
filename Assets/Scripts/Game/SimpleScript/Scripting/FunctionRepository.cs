@@ -1,23 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Assets.Scripts.Game.SimpleScript
+namespace Assets.Scripts.Game.SimpleScript.Scripting
 {
 
   public class FunctionRepository
   {
 
-    // Holds all function data
-    [System.Serializable]
-    public class FunctionData
-    {
-      public int Id;
-
-      public string Name;
-      public int ParameterCount;
-
-      public string Description;
-    }
     Dictionary<string, FunctionData> _functionData;
     Dictionary<int, string> _functionMapping;
     Dictionary<string, List<string>> _functionsByType;
@@ -34,7 +23,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
       // Load functions from disk
       _functionsByType = new();
-      var scripts = isEntityScripts ? ScriptManager.GetSystemEntityScripts() : ScriptManager.GetSystemItemScripts();
+      var scripts = isEntityScripts ? ScriptBaseController.GetSystemEntityScripts() : ScriptBaseController.GetSystemItemScripts();
       foreach (var script in scripts)
       {
         var fileName = script.Split(@"\")[^1];
@@ -43,15 +32,15 @@ namespace Assets.Scripts.Game.SimpleScript
         var typeName = scriptData[0];
         var functionName = scriptData[1];
 
-        // Load number of params
-        var scriptRaw = isEntityScripts ? ScriptManager.LoadSystemEntityScript(fileName) : ScriptManager.LoadSystemItemScript(fileName);
+        // Load meta data from script
+        var scriptRaw = isEntityScripts ? ScriptBaseController.LoadSystemEntityScript(fileName) : ScriptBaseController.LoadSystemItemScript(fileName);
         var numParams = 0;
         foreach (var line in scriptRaw.Split("\n"))
         {
           var lineUse = line.Trim();
           if (lineUse.StartsWith("$SetNumParams(") && lineUse.EndsWith(")"))
           {
-            numParams = int.Parse(line.Split("$SetNumParams(")[^1][..^2]);
+            numParams = int.Parse(lineUse[14..^1]);
           }
         }
 

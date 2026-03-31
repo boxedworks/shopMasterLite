@@ -1,37 +1,29 @@
 using System.Collections.Generic;
 using System.Linq;
-using CustomUI;
-using UnityEngine;
-
-using Newtonsoft.Json;
 using System.IO;
+using UnityEngine;
+using Newtonsoft.Json;
 
-namespace Assets.Scripts.Game.SimpleScript
+using Assets.Scripts.Game.SimpleScript.Entities.Item;
+using Assets.Scripts.Game.UI;
+using Assets.Scripts.Game.SimpleScript.Scripting;
+
+namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
 {
 
   public class ScriptEntityHelper
   {
     public static ScriptEntityHelper s_Singleton { get; private set; }
 
-    List<EntityTypeData> _entityTypeData
+    List<ScriptEntityTypeData> _entityTypeData
     {
       get
       {
         return _entityDataWrapper._EntityTypeData;
       }
     }
-    [System.Serializable]
-    struct EntityTypeDataWrapper
-    {
-      public List<EntityTypeData> _EntityTypeData;
-    }
-    EntityTypeDataWrapper _entityDataWrapper;
 
-    [System.Serializable]
-    struct EntityDataWrapper
-    {
-      public List<ScriptEntity.EntityData> _EntityData;
-    }
+    ScriptEntityTypeDataWrapper _entityDataWrapper;
 
     //
     FunctionRepository _functionRepository;
@@ -42,7 +34,7 @@ namespace Assets.Scripts.Game.SimpleScript
     {
       s_Singleton = this;
 
-      new EntityMaterialManager();
+      new ScriptEntityMaterialController();
 
       ScriptEntity.s_ScriptEntities = new();
       ScriptEntity.s_ScriptEntitiesMapped = new();
@@ -58,8 +50,8 @@ namespace Assets.Scripts.Game.SimpleScript
       s_Singleton._functionRepository.Load(true);
 
       // Load in entity type data
-      var rawText = System.IO.File.ReadAllText("entityTypeData.json");
-      var jsonData = JsonConvert.DeserializeObject<EntityTypeDataWrapper>(rawText);
+      var rawText = File.ReadAllText("entityTypeData.json");
+      var jsonData = JsonConvert.DeserializeObject<ScriptEntityTypeDataWrapper>(rawText);
       s_Singleton._entityDataWrapper = jsonData;
 
       // Match functions per entity type
@@ -103,19 +95,18 @@ namespace Assets.Scripts.Game.SimpleScript
       if (hasSaveData)
       {
         var rawText = File.ReadAllText(entityDataFilePath);
-        var jsonData = JsonConvert.DeserializeObject<EntityDataWrapper>(rawText);
+        var jsonData = JsonConvert.DeserializeObject<ScriptEntityDataWrapper>(rawText);
         var entityDataWrapper = jsonData;
         foreach (var entityData in entityDataWrapper._EntityData)
         {
           var entity = new ScriptEntity(entityData);
 
           // Load items
-
           if (entity._HasStorage)
             foreach (var itemData in entity._Storage)
             {
               if (itemData != null)
-                new Item(itemData);
+                new ScriptItem(itemData);
             }
         }
       }
@@ -166,7 +157,7 @@ namespace Assets.Scripts.Game.SimpleScript
 
       // Save entities
       var entityDataFilePath = "entityData.json";
-      var entityDataWrapper = new EntityDataWrapper
+      var entityDataWrapper = new ScriptEntityDataWrapper
       {
         _EntityData = new()
       };
@@ -185,11 +176,11 @@ namespace Assets.Scripts.Game.SimpleScript
     }
 
     //
-    public static EntityTypeData GetEntityTypeData(int id)
+    public static ScriptEntityTypeData GetEntityTypeData(int id)
     {
       return s_Singleton._entityTypeData[id];
     }
-    public static EntityTypeData GetEntityTypeData(ScriptEntity entity)
+    public static ScriptEntityTypeData GetEntityTypeData(ScriptEntity entity)
     {
       return GetEntityTypeData(entity._EntityData.TypeId);
     }
@@ -222,55 +213,116 @@ namespace Assets.Scripts.Game.SimpleScript
       }
     }
 
-    //
-    public struct NoiseSettings
-    {
-      public float XOffset;
-      public float ZOffset;
-      public float NoiseScale;
-    }
-    public static void GenerateMap(NoiseSettings noiseSettings)
-    {
-      DestroyAllEntities();
+    #region Variable Handling
+    // Function for validating variable types
 
-      var mapSizeX = 7;
-      var mapSizeZ = 7;
-      GameObject.Find("Floor").transform.localScale = new Vector3(mapSizeX, 1, mapSizeZ);
-      for (var x = 0; x < mapSizeX; x++)
+    public static bool IsValidVariableEntity(string variable)
+    {
+      return variable.StartsWith("$Entity[") && variable.EndsWith("]");
+    }
+
+    // Function for getting entity from variable
+    public static ScriptEntity GetEntityByStatement(string statement_)
+    {
+      statement_ = statement_.Trim();
+      if (IsValidVariableEntity(statement_))
+        return ScriptEntity.GetEntity(int.Parse(statement_.Split("$Entity[")[1][..^1]));
+      return null;
+    }
+    public static ScriptEntity GetEntityById(int id)
+    {
+      return ScriptEntity.GetEntity(id);
+    }
+    public static ScriptEntity GetEntityByIdOrStatement(string idOrStatement)
+    {
+      if (IsValidVariableEntity(idOrStatement))
+        return GetEntityByStatement(idOrStatement);
+      else if (int.TryParse(idOrStatement, out var id))
+        return GetEntityById(id);
+      return null;
+    }
+
+    public static string GetEntityStatement(ScriptEntity entity)
+    {
+      return $"$Entity[{entity._EntityData.Id}]";
+    }
+
+    // Function for validating item variable
+    public static bool IsValidVariableItem(string variable)
+    {
+      return variable.StartsWith("$Item[") && variable.EndsWith("]");
+    }
+
+    // Function for getting entity from variable
+    public static ScriptItem GetItemByStatement(string statement_)
+    {
+      statement_ = statement_.Trim();
+      if (IsValidVariableItem(statement_))
+        return ScriptItemController.GetItem(int.Parse(statement_.Split("$Item[")[1][..^1]));
+      return null;
+    }
+    public static ScriptItem GetItemById(int id)
+    {
+      return ScriptItemController.GetItem(id);
+    }
+    public static ScriptItem GetItemByIdOrStatement(string idOrStatement)
+    {
+      if (IsValidVariableItem(idOrStatement))
+        return GetItemByStatement(idOrStatement);
+      else if (int.TryParse(idOrStatement, out var id))
+        return GetItemById(id);
+      return null;
+    }
+
+    public static string GetItemStatement(ScriptItem item)
+    {
+      return $"$Item[{item._ItemData.Id}]";
+    }
+
+    public static bool IsValidTargetVariable(string variable)
+    {
+      return IsValidVariableEntity(variable) || IsValidVariableItem(variable);
+    }
+    public static ScriptTarget GetTargetByStatement(string statement)
+    {
+      var entity = GetEntityByStatement(statement);
+      if (entity != null) return new ScriptTarget(entity);
+      var item = GetItemByStatement(statement);
+      if (item != null) return new ScriptTarget(item);
+      return null;
+    }
+
+    public static string GetTargetStatement(ScriptTarget target)
+    {
+      return target._TargetType switch
       {
-        for (var z = 0; z < mapSizeZ; z++)
-        {
-          var x_ = -mapSizeX / 2 + x;
-          var z_ = -mapSizeZ / 2 + z;
-
-          var noise = Mathf.PerlinNoise(
-            (x + noiseSettings.XOffset) * noiseSettings.NoiseScale,
-            (z + noiseSettings.ZOffset) * noiseSettings.NoiseScale);
-          noise = Mathf.Pow(noise, 2f);
-
-          var entityType = -1;
-          if (noise < 0.01f)
-          {
-            entityType = 2;
-          }
-          else if (noise < 0.5f)
-          {
-          }
-          else if (noise < 0.52f)
-          {
-            entityType = 2;
-          }
-          else
-          {
-            entityType = 3;
-          }
-
-          Debug.Log($"Noise for {x_}, {z_}: {noise} .. entity type: {entityType}");
-
-          if (entityType != -1)
-            new ScriptEntity(entityType, new Vector3(x_, 0, z_), -1);
-        }
-      }
+        ScriptTarget.TargetType.SCRIPT_ENTITY => GetEntityStatement(target._ScriptEntity),
+        ScriptTarget.TargetType.ITEM => GetItemStatement(target._Item),
+        _ => null
+      };
     }
+
+    public static bool IsStringVariable(string variable)
+    {
+      return variable.StartsWith("\"") && variable.EndsWith("\"");
+    }
+    public static string GetStringVariable(string param)
+    {
+      return param[1..^1];
+    }
+    #endregion
+
+    public static Vector3 DirectionToVector3(int direction)
+    {
+      switch (direction)
+      {
+        case 0: return new Vector3(0, 0, 1);
+        case 1: return new Vector3(0, 0, -1);
+        case 2: return new Vector3(-1, 0, 0);
+        case 3: return new Vector3(1, 0, 0);
+      }
+      return Vector3.zero;
+    }
+
   }
 }

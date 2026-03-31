@@ -1,5 +1,7 @@
-_:setSprite(this, "cube")
+_:setSprite(this, "entities/rock")
 
-this.count = 2
+if(this.count == null)
+  this.count = 2
+end
 
 exit()

@@ -2,11 +2,12 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 
 using System.Linq;
-
-using Assets.Scripts.Game.SimpleScript;
 using UnityEngine.InputSystem;
 
-namespace CustomUI
+using Assets.Scripts.Game.SimpleScript.LevelGeneration;
+using Assets.Scripts.Game.SimpleScript.Entities.Entity;
+
+namespace Assets.Scripts.Game.UI
 {
   public class Terminal
   {
@@ -113,7 +114,7 @@ namespace CustomUI
           if (selectedEntity != null)
           {
             ScriptEntity.DestroyEntity(selectedEntity);
-            StatusPanel.StatusPanelManager.TryDestroyStatusForEntity_S(selectedEntity);
+            StatusPanelController.TryDestroyStatusForEntity_S(selectedEntity);
           }
           break;
 
@@ -137,7 +138,7 @@ namespace CustomUI
               return;
             }
 
-            ScriptEntityHelper.GenerateMap(new ScriptEntityHelper.NoiseSettings
+            LevelGenerationHelper.GenerateMap(new NoiseSettings
             {
               XOffset = commandParams.Length == 3 ? int.Parse(commandParams[0]) : Random.Range(0f, 100f),
               ZOffset = commandParams.Length == 3 ? int.Parse(commandParams[1]) : Random.Range(0f, 100f),

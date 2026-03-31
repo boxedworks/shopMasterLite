@@ -1,8 +1,8 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-
-using Assets.Scripts.Game.SimpleScript;
-using CustomUI;
+using UnityEngine.EventSystems;
+using Assets.Scripts.Game.SimpleScript.Entities.Entity;
+using Assets.Scripts.Game.UI;
 
 public class PlayerController
 {
@@ -117,6 +117,9 @@ public class PlayerController
         UpdateMouseSelectedUI(_selectedEntity._EntityData.X, _selectedEntity._EntityData.Z);
       }
     }
+
+    // Check ui tooltips
+    Debug.Log($"IsPointerOverGameObject [{EventSystem.current}]: {EventSystem.current.IsPointerOverGameObject()}");
   }
 
   //

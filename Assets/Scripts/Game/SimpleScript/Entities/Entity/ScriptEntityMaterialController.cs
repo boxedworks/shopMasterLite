@@ -1,20 +1,19 @@
 using System.Collections.Generic;
-using Mono.Cecil;
 using UnityEngine;
 
-namespace Assets.Scripts.Game.SimpleScript
+namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
 {
 
-  public class EntityMaterialManager
+  public class ScriptEntityMaterialController
   {
 
-    static EntityMaterialManager s_Singleton { get; set; }
+    static ScriptEntityMaterialController s_Singleton { get; set; }
 
     Dictionary<string, Material> _materialsByName;
     Dictionary<string, int> _entityCountBySpritePath;
     Material _baseMaterial { get { return GameController.s_Singleton._baseEntityMaterial; } }
 
-    public EntityMaterialManager()
+    public ScriptEntityMaterialController()
     {
       s_Singleton = this;
 

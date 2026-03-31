@@ -1,25 +1,32 @@
 {
-    "_EntityTypeData": [
-        {
-            "Id": 0,
-            "Name": "Character",
-            "Description": "A controllable character.",
-            "Solid": true,
-            "Size": 1
-        },
-        {
-            "Id": 1,
-            "Name": "Broken fence",
-            "Description": "A broken fence. You can probably jump it.",
-            "Solid": true,
-            "Size": 1
-        },
-        {
-            "Id": 2,
-            "Name": "Rock",
-            "Description": "It's a rock. You can mine this.",
-            "Solid": true,
-            "Size": 1
-        }
-    ]
+  "_EntityTypeData": [
+    {
+      "Id": 0,
+      "Name": "Character",
+      "Description": "A controllable character.",
+      "Solid": true,
+      "Size": 1
+    },
+    {
+      "Id": 1,
+      "Name": "Broken fence",
+      "Description": "A broken fence. You can probably jump it.",
+      "Solid": true,
+      "Size": 1
+    },
+    {
+      "Id": 2,
+      "Name": "Rock",
+      "Description": "It's a rock. You can mine this.",
+      "Solid": true,
+      "Size": 1
+    },
+    {
+      "Id": 3,
+      "Name": "Stone wall",
+      "Description": "It's a stone wall.",
+      "Solid": true,
+      "Size": 1
+    }
+  ]
 }
