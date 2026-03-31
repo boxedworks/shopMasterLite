@@ -13,25 +13,30 @@ namespace Assets.Scripts.Game.SimpleScript
     public abstract List<ScriptItemData> _Storage { get; }
     public bool _HasStorage { get { return (_Storage?.Count ?? 0) > 0; } }
 
-    public abstract Dictionary<string, string> _Attributes { get; }
+    public abstract Dictionary<string, string> _Attributes { get; set; }
 
     //
-    public bool HasEntityVariable(string variableName)
+    public bool HasAttribute(string key)
     {
-      return _Attributes.ContainsKey(variableName);
+      return _Attributes?.ContainsKey(key) ?? false;
     }
-    public string GetEntityVariable(string variableName)
+    public string GetAttribute(string key)
     {
-      return _Attributes[variableName];
+      return _Attributes?[key] ?? null;
     }
-    public void SetEntityVariable(string variableName, string value)
+    public void SetAttribute(string key, string value = null)
     {
-      if (!HasEntityVariable(variableName))
-      {
-        _Attributes.Add(variableName, value);
-        return;
-      }
-      _Attributes[variableName] = value;
+      _Attributes ??= new();
+      if (_Attributes.ContainsKey(key))
+        _Attributes[key] = value;
+      else
+        _Attributes.Add(key, value);
+    }
+    public void RemoveAttribute(string key)
+    {
+      if (_Attributes == null) return;
+      if (!_Attributes.ContainsKey(key)) return;
+      _Attributes.Remove(key);
     }
 
     //

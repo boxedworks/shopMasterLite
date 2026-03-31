@@ -111,6 +111,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
     ScriptEntity _attachedEntity;
     public ScriptEntity _AttachedEntity { get { return _attachedEntity; } }
 
+    ScriptItem _attachedItem;
+    public ScriptItem _AttachedItem { get { return _attachedItem; } }
+
     ScriptBase _parentScript;
     public ScriptBase _ParentScript { get { return _parentScript; } }
 
@@ -171,7 +174,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
       //Debug.Log($"Ticking script [{_Id}] for entity [{_attachedEntity._EntityData.Id}]");
 
       _breakLoop = false;
-      var tokensAlloted = 10;
+      var tokensAlloted = 15;
       _tickCooldown = 1;
       for (; ; )
       {
@@ -219,6 +222,12 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
         }
         _lineOriginal = _line;
 
+        // Check logic token drain
+        if (tokensAlloted-- == 0)
+        {
+          logError($"Logic tokens drained");
+          break;
+        }
 
         //
         HandleLine(_line);
@@ -253,10 +262,14 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
         if (line.StartsWith("$SetItemCount(") && line.EndsWith(")"))
         {
           var size = int.Parse(line[14..^1]);
-          _attachedEntity._EntityData.ItemStorage = new ScriptItemStorage
+          var itemStorage = new ScriptItemStorage
           {
             Items = Enumerable.Repeat<ScriptItemData>(null, size).ToList()
           };
+          if (_attachedItem != null)
+            _attachedItem._ItemData.ItemStorage = itemStorage;
+          else
+            _attachedEntity._EntityData.ItemStorage = itemStorage;
           return;
         }
       }
@@ -530,13 +543,6 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
       }
 
       if (_lineDepth != _logicDepth) return;
-
-      //
-      // if (tokensAlloted-- == 0)
-      // {
-      //   logError($"Logic tokens drained");
-      //   break;
-      // }
 
       // New variable assignment
       if (line.StartsWith("var "))
@@ -860,7 +866,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
       if (isEntityVariable)
       {
         //Debug.Log($"Setting entity variable: {variable} => {value}");
-        _attachedEntity.SetEntityVariable(variable, value);
+        _attachedEntity.SetAttribute(variable, value);
         return;
       }
       if (newAssignment)
@@ -1122,9 +1128,10 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               }
 
               // Check item storage
-              if (_attachedEntity._HasStorage && word == "items")
+              if (word == "items")
               {
-                continue;
+                if ((_attachedItem != null && _attachedItem._HasStorage) || (_attachedItem == null && _attachedEntity._HasStorage))
+                  continue;
               }
 
               // Check all valid first accessors
@@ -1155,9 +1162,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
             {
               var targetGot = ScriptBaseHelper.GetTargetByStatement(returnStatement);
               //Debug.Log($"Is valid variable entity: {returnStatement} .. checking for accessor {word}");
-              if (targetGot.HasEntityVariable(word))
+              if (targetGot.HasAttribute(word))
               {
-                returnStatement = $"{targetGot.GetEntityVariable(word)}";
+                returnStatement = $"{targetGot.GetAttribute(word)}";
 
                 validAccessors = new()
                   {
@@ -1170,8 +1177,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
             if (accessorLastSave == "items")
             {
 
-              var target = new ScriptTarget(_attachedEntity);
-              var storage = target._ScriptEntity._Storage;
+              var storage = _attachedItem != null ? _attachedItem._Storage : _attachedEntity._Storage;
               switch (word)
               {
 
@@ -1449,7 +1455,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
                 ScriptType = ScriptBaseController.ScriptType.ITEM
               });
               itemScript._parentScript = this;
-              itemScript._variables["this"]._Value = ScriptBaseHelper.GetItemStatement(currentTarget._Item);
+              itemScript.AttachItem(currentTarget._Item);
 
               // Add script parameters
               for (var u = 0; u < functionParameters.Count; u++)
@@ -1620,6 +1626,13 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
           _variables.Remove(pair.Key);
           //Debug.Log($"Removed variable {pair.Key} due to logic depth");
         });
+    }
+
+    //
+    public void AttachItem(ScriptItem item)
+    {
+      _variables["this"]._Value = ScriptBaseHelper.GetItemStatement(item);
+      _attachedItem = item;
     }
 
     // Log error

@@ -1,4 +1,3 @@
-var items = this.items;
 if(items.count == 0)
 	log("You shake the empty vial.")
 	exit(5)

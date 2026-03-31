@@ -1,6 +1,4 @@
 $SetItemCount(2)
+_:setSprite(this, "vial_empty")
 
-log("vial spawned")
-
-var item = this
-log(item)
+exit()

@@ -133,13 +133,13 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
       for (var i = 0; i < s_itemTypeData.Count; i++)
       {
         var itemTypeData = s_itemTypeData[i];
-        var functionsByType = ScriptEntityHelper.s_FunctionRepository.GetFunctionsByType(itemTypeData.Name.ToLower());
+        var functionsByType = _functionRepository.GetFunctionsByType(itemTypeData.Name.ToLower());
+        var itemTypeKey = itemTypeData.Name.ToLower();
         var functionIds = new List<int>();
         foreach (var func in functionsByType)
         {
-          var id = _functionRepository.GetFunctionId(func);
+          var id = _functionRepository.GetFunctionId($"{itemTypeKey}.{func}");
           functionIds.Add(id);
-          Debug.Log($"Mapped function {func} to item type {itemTypeData.Name} with id {id}");
         }
         var publicFunctionIds = functionIds.ToArray();
         itemTypeData.PublicFunctionIds = publicFunctionIds;

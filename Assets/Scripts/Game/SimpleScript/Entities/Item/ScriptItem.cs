@@ -12,7 +12,7 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
     //
     public ScriptItemData _ItemData;
     public ScriptItemTypeData _ItemTypeData { get { return ScriptItemController.GetItemTypeData(_ItemData.TypeId); } }
-    public override Dictionary<string, string> _Attributes { get { return _ItemData.Attributes; } }
+    public override Dictionary<string, string> _Attributes { get { return _ItemData.Attributes; } set { _ItemData.Attributes = value; } }
     public override List<ScriptItemData> _Storage { get { return _ItemData.ItemStorage?.Items; } }
 
     //
@@ -49,14 +49,15 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
       Debug.Log($"Checking spawn script for item type {_ItemTypeData.Name}");
       if (ScriptItemController.HasFunction(this, "spawn"))
       {
-        spawnEntity.LoadAndAttachScript(new ScriptBaseController.ScriptLoadData()
+        var itemScript = spawnEntity.LoadAndAttachScript(new ScriptBaseController.ScriptLoadData()
         {
           ScriptType = ScriptBaseController.ScriptType.ITEM,
           PathTo = $"{_ItemTypeData.Name.ToLower()}.spawn"
-        })
+        });
+        itemScript.AttachItem(this);
 
         // Tick spawn script immediately
-        .Tick();
+        itemScript.Tick();
       }
     }
 
@@ -64,30 +65,6 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Item
     public void Destroy()
     {
       ScriptItemController.RemoveItem(_ItemData.Id);
-    }
-
-    //
-    public bool HasAttribute(string key)
-    {
-      return _Attributes?.ContainsKey(key) ?? false;
-    }
-    public string GetAttribute(string key)
-    {
-      return _Attributes?[key] ?? null;
-    }
-    public void SetAttribute(string key, string value = null)
-    {
-      _ItemData.Attributes ??= new();
-      if (_Attributes.ContainsKey(key))
-        _Attributes[key] = value;
-      else
-        _Attributes.Add(key, value);
-    }
-    public void RemoveAttribute(string key)
-    {
-      if (_Attributes == null) return;
-      if (!_Attributes.ContainsKey(key)) return;
-      _Attributes.Remove(key);
     }
 
     //

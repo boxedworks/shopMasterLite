@@ -45,11 +45,12 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
         }
 
         // Add function data
-        Debug.Log($"Loaded script [Entity script = {isEntityScripts}] {fileName} with {numParams} params.. [{typeName}]");
+        //Debug.Log($"Loaded script [Entity script = {isEntityScripts}] {fileName} with {numParams} params.. [{typeName}]");
         AddFunction(fileName, "System loaded...", numParams);
         if (!_functionsByType.ContainsKey(typeName))
-          _functionsByType.Add(typeName, new());
-        _functionsByType[typeName].Add(functionName);
+          _functionsByType.Add(typeName, new() { functionName });
+        else
+          _functionsByType[typeName].Add(functionName);
       }
     }
 

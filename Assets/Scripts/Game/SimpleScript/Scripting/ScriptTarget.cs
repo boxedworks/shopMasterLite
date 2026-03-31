@@ -56,7 +56,11 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
     }
 
     public override List<ScriptItemData> _Storage { get { return _IsScriptEntity ? _scriptEntity._EntityData.ItemStorage?.Items : _item._ItemData.ItemStorage?.Items; } }
-    public override Dictionary<string, string> _Attributes { get { return _IsScriptEntity ? _scriptEntity._EntityData.Attributes : _item._ItemData.Attributes; } }
+    public override Dictionary<string, string> _Attributes
+    {
+      get { return _IsScriptEntity ? _scriptEntity._EntityData.Attributes : _item._ItemData.Attributes; }
+      set { if (_IsScriptEntity) _scriptEntity._EntityData.Attributes = value; else _item._ItemData.Attributes = value; }
+    }
 
     //
     public ScriptTarget(ScriptEntity entity)

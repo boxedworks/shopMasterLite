@@ -22,7 +22,7 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
     // Holds saveable entity data
     public ScriptEntityData _EntityData;
     public ScriptEntityTypeData _EntityTypeData { get { return ScriptEntityHelper.GetEntityTypeData(this); } }
-    public override Dictionary<string, string> _Attributes { get { return _EntityData.Attributes; } }
+    public override Dictionary<string, string> _Attributes { get { return _EntityData.Attributes; } set { _EntityData.Attributes = value; } }
     public int _EntityType { get { return _EntityTypeData.Id; } }
     public (int x, int y, int z) _TilePosition { get { return (_EntityData.X, _EntityData.Y, _EntityData.Z); } }
     public Vector3 _TilePositionVector3 { get { return new Vector3(_EntityData.X, _EntityData.Y, _EntityData.Z); } }
@@ -96,13 +96,13 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
       AddScriptEntity(this);
 
       // Create entity variables per type
-      SetEntityVariable("x", $"{_EntityData.X}");
-      SetEntityVariable("y", $"{_EntityData.Y}");
-      SetEntityVariable("z", $"{_EntityData.Z}");
+      SetAttribute("x", $"{_EntityData.X}");
+      SetAttribute("y", $"{_EntityData.Y}");
+      SetAttribute("z", $"{_EntityData.Z}");
       switch (_EntityTypeData.Name)
       {
         case "Character":
-          SetEntityVariable("Health", "10");
+          SetAttribute("Health", "10");
           break;
       }
 
@@ -507,9 +507,9 @@ namespace Assets.Scripts.Game.SimpleScript.Entities.Entity
       AddScriptEntity(this);
 
       // Set entity variables for position
-      SetEntityVariable("x", $"{_EntityData.X}");
-      SetEntityVariable("y", $"{_EntityData.Y}");
-      SetEntityVariable("z", $"{_EntityData.Z}");
+      SetAttribute("x", $"{_EntityData.X}");
+      SetAttribute("y", $"{_EntityData.Y}");
+      SetAttribute("z", $"{_EntityData.Z}");
 
       // Animate
       if (animate)

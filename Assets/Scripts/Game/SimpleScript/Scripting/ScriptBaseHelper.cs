@@ -434,7 +434,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
           //
           Terminal.s_Singleton.LogMessage($"Gave item ID {item._ItemTypeData.Name} to entity ID {entityData}");
-          return SystemFunctionReturnData.Success(0);
+          return SystemFunctionReturnData.Success(GetItemStatement(item), 0);
         }
       );
 
