@@ -1,1 +1,6 @@
 $SetItemCount(2)
+
+log("vial spawned")
+
+var item = this
+log(item)

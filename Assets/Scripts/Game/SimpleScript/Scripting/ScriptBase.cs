@@ -141,7 +141,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
       {
         _variables = new Dictionary<string, Variable>
         {
-          { "this", new Variable(_logicDepth) { _Value = ScriptEntityHelper.GetEntityStatement(_attachedEntity) } }
+          { "this", new Variable(_logicDepth) { _Value = ScriptBaseHelper.GetEntityStatement(_attachedEntity) } }
         };
       }
 
@@ -1066,7 +1066,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               }
 
               // Check simple string
-              if (ScriptEntityHelper.IsStringVariable(word))
+              if (ScriptBaseHelper.IsStringVariable(word))
               {
 
                 // Substitue string variables
@@ -1100,9 +1100,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               // }
 
               // Check entity variable
-              if (ScriptEntityHelper.IsValidVariableEntity(word))
+              if (ScriptBaseHelper.IsValidVariableEntity(word))
               {
-                currentTarget = new ScriptTarget(ScriptEntityHelper.GetEntityByStatement(word));
+                currentTarget = new ScriptTarget(ScriptBaseHelper.GetEntityByStatement(word));
                 currentTargetDepth = i;
 
                 if (parameterCheck)
@@ -1111,9 +1111,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               }
 
               // Check item variable
-              if (ScriptEntityHelper.IsValidVariableItem(word))
+              if (ScriptBaseHelper.IsValidVariableItem(word))
               {
-                currentTarget = new ScriptTarget(ScriptEntityHelper.GetItemByStatement(word));
+                currentTarget = new ScriptTarget(ScriptBaseHelper.GetItemByStatement(word));
                 currentTargetDepth = i;
 
                 if (parameterCheck)
@@ -1151,9 +1151,9 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
             // Check valid accessor based on last accessor
             List<string> validAccessors = null;
-            if (ScriptEntityHelper.IsValidTargetVariable(returnStatement))
+            if (ScriptBaseHelper.IsValidTargetVariable(returnStatement))
             {
-              var targetGot = ScriptEntityHelper.GetTargetByStatement(returnStatement);
+              var targetGot = ScriptBaseHelper.GetTargetByStatement(returnStatement);
               //Debug.Log($"Is valid variable entity: {returnStatement} .. checking for accessor {word}");
               if (targetGot.HasEntityVariable(word))
               {
@@ -1406,7 +1406,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
                 ScriptType = ScriptBaseController.ScriptType.ENTITY
               });
               entityScript._parentScript = this;
-              entityScript._variables.Add("_entity", new Variable(_logicDepth) { _Value = ScriptEntityHelper.GetEntityStatement(_attachedEntity) });
+              entityScript._variables.Add("_entity", new Variable(_logicDepth) { _Value = ScriptBaseHelper.GetEntityStatement(_attachedEntity) });
 
               // Add script parameters
               for (var u = 0; u < functionParameters.Count; u++)
@@ -1449,7 +1449,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
                 ScriptType = ScriptBaseController.ScriptType.ITEM
               });
               itemScript._parentScript = this;
-              itemScript._variables["this"]._Value = ScriptEntityHelper.GetItemStatement(currentTarget._Item);
+              itemScript._variables["this"]._Value = ScriptBaseHelper.GetItemStatement(currentTarget._Item);
 
               // Add script parameters
               for (var u = 0; u < functionParameters.Count; u++)

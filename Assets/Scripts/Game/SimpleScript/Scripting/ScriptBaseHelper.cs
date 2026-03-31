@@ -67,14 +67,14 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
           var logMessage = parameters[0];
 
           // Check entity or item
-          if (ScriptEntityHelper.IsValidVariableEntity(logMessage))
+          if (IsValidVariableEntity(logMessage))
           {
-            var entity = ScriptEntityHelper.GetEntityByIdOrStatement(logMessage);
+            var entity = GetEntityByIdOrStatement(logMessage);
             logMessage = entity?.ToString() ?? "[null entity]";
           }
-          else if (ScriptEntityHelper.IsValidVariableItem(logMessage))
+          else if (IsValidVariableItem(logMessage))
           {
-            var item = ScriptEntityHelper.GetItemByIdOrStatement(logMessage);
+            var item = GetItemByIdOrStatement(logMessage);
             logMessage = item?.ToString() ?? "[null item]";
           }
 
@@ -147,7 +147,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
         {
 
           // Validate accessor
-          if (ScriptEntityHelper.IsValidVariableEntity(accessor))
+          if (IsValidVariableEntity(accessor))
           {
             return SystemFunctionReturnData.NotImplemented();
           }
@@ -192,7 +192,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
                 // Get entity by variable or id
                 var entityData = parameters[0];
-                ScriptEntity entity = ScriptEntityHelper.GetEntityByIdOrStatement(entityData);
+                ScriptEntity entity = GetEntityByIdOrStatement(entityData);
                 if (entity == null)
                 {
                   return SystemFunctionReturnData.NullReference();
@@ -324,7 +324,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               // Return found entity
               else
               {
-                return SystemFunctionReturnData.Success(ScriptEntityHelper.GetEntityStatement(entity), 0);
+                return SystemFunctionReturnData.Success(GetEntityStatement(entity), 0);
               }
 
             // Inventory
@@ -353,7 +353,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
               // Return found entity
               else
               {
-                return SystemFunctionReturnData.Success(ScriptEntityHelper.GetItemStatement(item), 0);
+                return SystemFunctionReturnData.Success(GetItemStatement(item), 0);
               }
 
             // Invalid accessor
@@ -414,7 +414,7 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
           // Get entity by id
           var entityData = parameters[0];
-          var entity = ScriptEntityHelper.GetEntityByIdOrStatement(entityData);
+          var entity = GetEntityByIdOrStatement(entityData);
           if (entity == null)
           {
             return SystemFunctionReturnData.NullReference();
@@ -490,14 +490,14 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
           // Get entity by id
           var targetData = parameters[0];
-          var target = ScriptEntityHelper.GetTargetByStatement(targetData);
+          var target = GetTargetByStatement(targetData);
           if (target == null)
           {
             return SystemFunctionReturnData.NullReference();
           }
 
           // Get sprite path
-          var spritePath = ScriptEntityHelper.GetStringVariable(parameters[1]);
+          var spritePath = GetStringVariable(parameters[1]);
 
           // Set sprite
           var hasError = !(target._IsScriptEntity ? target._ScriptEntity.SetSprite(spritePath) : target._Item.SetSprite(spritePath));
@@ -530,14 +530,14 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
           // Get entity by id
           var entityData = parameters[0];
-          var entity = ScriptEntityHelper.GetEntityByIdOrStatement(entityData);
+          var entity = GetEntityByIdOrStatement(entityData);
           if (entity == null)
           {
             return SystemFunctionReturnData.NullReference();
           }
 
           // Get animation params
-          var animation = Enum.Parse<ScriptEntityAnimation.AnimationType>(ScriptEntityHelper.GetStringVariable(parameters[1]));
+          var animation = Enum.Parse<ScriptEntityAnimation.AnimationType>(GetStringVariable(parameters[1]));
           var animationTime = float.Parse(parameters[2]);
 
           // Animate
@@ -567,14 +567,14 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
           // Get entity by id
           var entityData = parameters[0];
-          var entity = ScriptEntityHelper.GetEntityByIdOrStatement(entityData);
+          var entity = GetEntityByIdOrStatement(entityData);
           if (entity == null)
           {
             return SystemFunctionReturnData.NullReference();
           }
 
           // Get animation params
-          var animation = Enum.Parse<ScriptEntityAnimation.AnimationType>(ScriptEntityHelper.GetStringVariable(parameters[1]));
+          var animation = Enum.Parse<ScriptEntityAnimation.AnimationType>(GetStringVariable(parameters[1]));
           var animationTime = float.Parse(parameters[2]);
 
           // Animate
@@ -604,21 +604,21 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
 
           // Get entity by id
           var entityData = parameters[0];
-          var entity = ScriptEntityHelper.GetEntityByIdOrStatement(entityData);
+          var entity = GetEntityByIdOrStatement(entityData);
           if (entity == null)
           {
             return SystemFunctionReturnData.NullReference();
           }
 
           // Get sfx params
-          var sfxFolderName = Enum.Parse<SfxController.AudioObjectType>(ScriptEntityHelper.GetStringVariable(parameters[1]));
+          var sfxFolderName = Enum.Parse<SfxController.AudioObjectType>(GetStringVariable(parameters[1]));
           var sfxName = -1;
           if (sfxFolderName == SfxController.AudioObjectType.Character)
-            sfxName = (int)Enum.Parse<SfxController.CharacterSfx>(ScriptEntityHelper.GetStringVariable(parameters[2]));
+            sfxName = (int)Enum.Parse<SfxController.CharacterSfx>(GetStringVariable(parameters[2]));
           else if (sfxFolderName == SfxController.AudioObjectType.Rock)
-            sfxName = (int)Enum.Parse<SfxController.RockSfx>(ScriptEntityHelper.GetStringVariable(parameters[2]));
+            sfxName = (int)Enum.Parse<SfxController.RockSfx>(GetStringVariable(parameters[2]));
           else if (sfxFolderName == SfxController.AudioObjectType.PlayerController)
-            sfxName = (int)Enum.Parse<SfxController.PlayerControllerSfx>(ScriptEntityHelper.GetStringVariable(parameters[2]));
+            sfxName = (int)Enum.Parse<SfxController.PlayerControllerSfx>(GetStringVariable(parameters[2]));
           if (sfxName == -1)
             return SystemFunctionReturnData.Custom("Sfx not found");
 
@@ -632,6 +632,109 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
         }
       );
     }
-  }
 
+    #region Variable Handling
+    // Function for validating variable types
+
+    public static bool IsValidVariableEntity(string variable)
+    {
+      return variable.StartsWith("$Entity[") && variable.EndsWith("]");
+    }
+
+    // Function for getting entity from variable
+    public static ScriptEntity GetEntityByStatement(string statement_)
+    {
+      statement_ = statement_.Trim();
+      if (IsValidVariableEntity(statement_))
+        return ScriptEntity.GetEntity(int.Parse(statement_.Split("$Entity[")[1][..^1]));
+      return null;
+    }
+    public static ScriptEntity GetEntityById(int id)
+    {
+      return ScriptEntity.GetEntity(id);
+    }
+    public static ScriptEntity GetEntityByIdOrStatement(string idOrStatement)
+    {
+      if (IsValidVariableEntity(idOrStatement))
+        return GetEntityByStatement(idOrStatement);
+      else if (int.TryParse(idOrStatement, out var id))
+        return GetEntityById(id);
+      return null;
+    }
+
+    public static string GetEntityStatement(ScriptEntity entity)
+    {
+      return $"$Entity[{entity._EntityData.Id}]";
+    }
+
+    // Function for validating item variable
+    public static bool IsValidVariableItem(string variable)
+    {
+      return variable.StartsWith("$Item[") && variable.EndsWith("]");
+    }
+
+    // Function for getting entity from variable
+    public static ScriptItem GetItemByStatement(string statement_)
+    {
+      statement_ = statement_.Trim();
+      if (IsValidVariableItem(statement_))
+        return ScriptItemController.GetItem(int.Parse(statement_.Split("$Item[")[1][..^1]));
+      return null;
+    }
+    public static ScriptItem GetItemById(int id)
+    {
+      return ScriptItemController.GetItem(id);
+    }
+    public static ScriptItem GetItemByIdOrStatement(string idOrStatement)
+    {
+      if (IsValidVariableItem(idOrStatement))
+        return GetItemByStatement(idOrStatement);
+      else if (int.TryParse(idOrStatement, out var id))
+        return GetItemById(id);
+      return null;
+    }
+
+    public static string GetItemStatement(ScriptItem item)
+    {
+      return GetItemStatement(item._ItemData.Id);
+    }
+    public static string GetItemStatement(int itemId)
+    {
+      return $"$Item[{itemId}]";
+    }
+
+    public static bool IsValidTargetVariable(string variable)
+    {
+      return IsValidVariableEntity(variable) || IsValidVariableItem(variable);
+    }
+    public static ScriptTarget GetTargetByStatement(string statement)
+    {
+      var entity = GetEntityByStatement(statement);
+      if (entity != null) return new ScriptTarget(entity);
+      var item = GetItemByStatement(statement);
+      if (item != null) return new ScriptTarget(item);
+      return null;
+    }
+
+    public static string GetTargetStatement(ScriptTarget target)
+    {
+      return target._TargetType switch
+      {
+        ScriptTarget.TargetType.SCRIPT_ENTITY => GetEntityStatement(target._ScriptEntity),
+        ScriptTarget.TargetType.ITEM => GetItemStatement(target._Item),
+        _ => null
+      };
+    }
+
+    public static bool IsStringVariable(string variable)
+    {
+      return variable.StartsWith("\"") && variable.EndsWith("\"");
+    }
+    public static string GetStringVariable(string param)
+    {
+      return param[1..^1];
+    }
+    #endregion
+
+  }
 }

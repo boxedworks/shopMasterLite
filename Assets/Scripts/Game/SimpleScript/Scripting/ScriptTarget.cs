@@ -80,10 +80,10 @@ namespace Assets.Scripts.Game.SimpleScript.Scripting
     public static ScriptTarget TryGetScriptTarget(string targetString)
     {
 
-      if (ScriptEntityHelper.IsValidVariableEntity(targetString))
-        return new ScriptTarget(ScriptEntityHelper.GetEntityByStatement(targetString));
-      else if (ScriptEntityHelper.IsValidVariableItem(targetString))
-        return new ScriptTarget(ScriptEntityHelper.GetItemByStatement(targetString));
+      if (ScriptBaseHelper.IsValidVariableEntity(targetString))
+        return new ScriptTarget(ScriptBaseHelper.GetEntityByStatement(targetString));
+      else if (ScriptBaseHelper.IsValidVariableItem(targetString))
+        return new ScriptTarget(ScriptBaseHelper.GetItemByStatement(targetString));
       return null;
     }
   }

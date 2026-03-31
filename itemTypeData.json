@@ -9,6 +9,11 @@
       "Id": 1,
       "Name": "Stone",
       "Description": "A piece of stone. Can be used for crafting."
+    },
+    {
+      "Id": 2,
+      "Name": "Vial",
+      "Description": "A vial. Can be used for storing liquids."
     }
   ]
 }
